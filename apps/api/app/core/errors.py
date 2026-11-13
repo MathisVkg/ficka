@@ -8,7 +8,9 @@ from starlette.exceptions import HTTPException
 logger = logging.getLogger("ficka")
 
 
-def error_response(request: Request, status: int, code: str, message: str) -> JSONResponse:
+def error_response(
+    request: Request, status: int, code: str, message: str, fields: dict | None = None
+) -> JSONResponse:
     return JSONResponse(
         status_code=status,
         headers={"X-Request-ID": request.state.request_id},
@@ -17,6 +19,7 @@ def error_response(request: Request, status: int, code: str, message: str) -> JS
                 "code": code,
                 "message": message,
                 "request_id": request.state.request_id,
+                **({"fields": fields} if fields else {}),
             }
         },
     )
@@ -25,12 +28,27 @@ def error_response(request: Request, status: int, code: str, message: str) -> JS
 def register_errors(app: FastAPI) -> None:
     @app.exception_handler(HTTPException)
     async def http_error(request: Request, exc: HTTPException) -> JSONResponse:
-        code = "service_unavailable" if exc.status_code == 503 else "http_error"
-        return error_response(request, exc.status_code, code, str(exc.detail))
+        code = {503: "service_unavailable", 422: "validation_error", 409: "conflict"}.get(
+            exc.status_code,
+            "http_error",
+        )
+        detail = exc.detail if isinstance(exc.detail, dict) else {"message": str(exc.detail)}
+        return error_response(
+            request, exc.status_code, code, detail["message"], detail.get("fields")
+        )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
-        return error_response(request, 422, "validation_error", "Invalid request parameters")
+        return error_response(
+            request,
+            422,
+            "validation_error",
+            "Check the highlighted values",
+            {
+                ".".join(map(str, error["loc"][1:])) or "form": error["msg"]
+                for error in exc.errors()
+            },
+        )
 
     @app.exception_handler(Exception)
     async def unexpected_error(request: Request, exc: Exception) -> JSONResponse:

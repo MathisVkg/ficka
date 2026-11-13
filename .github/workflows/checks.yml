@@ -79,6 +79,20 @@ jobs:
           FICKA_API_IMAGE: ficka-api:latest
           WEB_BIND_ADDRESS: 127.0.0.1
       - run: curl --fail http://localhost:3000/api/health/ready
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @ficka/web exec playwright install --with-deps chromium
+      - name: Real financial browser flows through the image-only stack
+        run: pnpm --filter @ficka/web exec playwright test --config playwright.live.config.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: live-browser-results
+          path: apps/web/test-results
       - if: always()
         run: docker compose -f docker-compose.yml logs --no-color
       - if: always()

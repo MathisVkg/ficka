@@ -145,3 +145,23 @@ From `apps/api`, create future migrations with `uv run --env-file ../../.env ale
 - **Windows build EBUSY:** stop the production preview before rebuilding `.next/standalone`.
 
 Keep the database volume. Never use `down -v` to fix a password problem on a database you need. Deployment, backup and registry guidance is in [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## Financial-entry development (Task 02)
+
+Run `uv run --env-file ../../.env alembic upgrade head` from `apps/api` before starting the updated API. This applies revision 0002 after the preserved foundation. It creates category/entry tables and seeds category suggestions, never demo financial entries. Back up a real database first and preserve its volume.
+
+Financial models and services are under `app/models/financial.py` and `app/services/financial.py`; schemas and versioned routers have matching modules. Full API/date/VAT behavior is documented in [FINANCIAL_ENTRIES.md](FINANCIAL_ENTRIES.md).
+
+`uv run pytest` runs precision/validation tests without a database. With `RUN_DB_TESTS=1` and a migrated disposable PostgreSQL database, `uv run --env-file ../../.env pytest tests/integration` also tests real CRUD, status transitions, soft deletion, categories, filtering and pagination. Each financial test rolls back its savepoint-isolated writes.
+
+For live browser tests against a running disposable stack (do not target your real company database):
+
+```powershell
+$env:FICKA_E2E_BASE_URL = "http://localhost:3000"
+pnpm --filter @ficka/web exec playwright test --config playwright.live.config.ts
+Remove-Item Env:FICKA_E2E_BASE_URL
+```
+
+This configuration does not start its own web server. CI runs it against the image-only Compose stack after migration. It writes clearly named test entries, checks persistence and soft deletion, tests category changes and server pagination. Ordinary `pnpm test` uses mocked API boundaries for deterministic form/error tests and verifies fluid layout at 1920, 1440, 1024, 768 and 390px.
+
+Migration downgrade tests are only for disposable databases: downgrading 0002 removes all financial tables and data. Concurrent online migration processes serialize through a PostgreSQL advisory lock. A failed upgrade keeps the new API container from starting its server. No production database was reset as part of Task 02.

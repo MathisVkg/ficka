@@ -1,6 +1,6 @@
 # Ficka
 
-Self-hosted financial tracking for small businesses. This is the project foundation: six responsive routes, neutral empty dashboard states, typed API readiness, PostgreSQL sessions and Alembic migrations. Financial entries, reports, recurring processing, OCR and sign-in are future modules.
+Self-hosted financial tracking for small businesses. Income and Expenses now support persistent entries, date/status management, precise VAT recording, filtering, pagination and safe deletion. Settings manages reusable categories. Dashboard reporting, recurring processing, OCR and sign-in remain future modules.
 
 ## Choose how to run it
 
@@ -41,8 +41,14 @@ After preparing `.env`, run `docker compose -f compose.yaml up --build --wait`. 
 
 Main pushes run all checks before publishing `ghcr.io/mathisvkg/ficka-web` and `ghcr.io/mathisvkg/ficka-api`, tagged `main` and `sha-<full-commit-sha>`. Wait for a successful **Publish images** workflow before deploying. Set each package public or give Portainer GHCR pull credentials.
 
+## Financial entry management
+
+After applying migrations, open Income or Expenses and use **New income** / **New expense**. Centered forms preserve edited payment dates and support VAT presets or manual amounts. Entries use Draft, Pending and Paid/Received states. Settings manages categories without deleting historical references. See [financial behavior and API](docs/FINANCIAL_ENTRIES.md). Dashboard calculations remain unimplemented and display no fabricated totals.
+
+Revision 0002 adds the financial tables and suggested categories without resetting the database. API image startup applies it before serving. Back up the database before redeploying matched API/web images through the existing Portainer workflow. No new services or environment variables are required.
+
 ## Quality and scope
 
-Run `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`; backend checks are in [DEVELOPMENT.md](docs/DEVELOPMENT.md). Both dependency lockfiles are committed. Browser tests cover desktop/mobile routes and connection error recovery. CI also tests real PostgreSQL and both Compose modes.
+Run `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`; backend checks are in [DEVELOPMENT.md](docs/DEVELOPMENT.md). Both dependency lockfiles are committed. Browser tests cover financial forms, desktop/mobile routes, date synchronization, save errors, deletion and five viewport widths. CI also tests real PostgreSQL, both Compose modes and browser flows against persisted entries.
 
 See [architecture](docs/ARCHITECTURE.md) and [product scope](docs/PRODUCT_SCOPE.md). No demo figures are displayed as company data. The application has no authentication yet; use a trusted LAN or private reverse proxy.

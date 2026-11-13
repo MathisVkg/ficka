@@ -2,24 +2,32 @@
 
 ## Runtime boundaries
 
-The pnpm workspace contains `apps/web` (Next.js App Router, React, TypeScript, Tailwind 4). `apps/api` is an independent Python 3.13/uv project (FastAPI, Pydantic, SQLAlchemy 2, psycopg, Alembic). No shared package is needed yet. PostgreSQL 17 belongs exclusively to Ficka.
+The pnpm frontend is Next.js App Router, React, TypeScript and Tailwind 4. The independent uv/Python 3.13 API is FastAPI, Pydantic, SQLAlchemy 2, psycopg and Alembic. PostgreSQL belongs exclusively to Ficka. No shared package is needed.
 
-Browser → Next.js route handler → FastAPI → PostgreSQL. The browser uses the typed `src/lib/api/client.ts` boundary and a same-origin readiness route. Runtime `API_INTERNAL_URL` stays on the web server. API and database ports need not be published. The adapter currently exposes only readiness, not an unrestricted proxy.
+Browser → typed frontend client → same-origin Next.js route handler → FastAPI → PostgreSQL. Runtime `API_INTERNAL_URL` stays on the web server. The financial adapter restricts resources and rejects cross-site JSON writes. API/database host ports remain unpublished in deployment. A future Sentinel integration must authenticate and authorize this boundary; origin checks are not authentication.
 
-API routes delegate to services; Pydantic schemas describe HTTP payloads; SQLAlchemy models will live in `app/models`; sessions are request-scoped and always closed. Future write services must explicitly commit or roll back transactions. No financial models exist. The initial no-op migration establishes the Alembic version table; future model modules must be imported into migration metadata.
+Frontend routes compose shared financial table, form and category components. Income and Expenses use type-specific labels with common implementation. Radix Dialog/AlertDialog handle centered modal focus, Escape and confirmations. Native input/select controls keep forms lightweight. Theme variables define the light appearance; financial data areas are fluid while forms and prose retain readable widths.
 
-Liveness is process-only. Readiness executes `SELECT 1` with a bounded connection timeout and returns 503 on database failure. Errors use `{error: {code, message, request_id}}`, without database details. Request IDs correlate JSON application logs and response headers. CORS defaults to no cross-origin access and accepts only the explicit configured origin list; there is no wildcard.
+## API and persistence
 
-## Future modules (not implemented)
+Versioned API routes delegate to services; schemas validate requests and serialize decimal strings. SQLAlchemy models define `financial_entries` and `categories`. Request-scoped sessions close reliably; writes commit explicitly, database constraints guard invariants, and row locks protect update/category assignment operations. Soft deletion retains latest entry data, and category archival preserves references. See [FINANCIAL_ENTRIES.md](FINANCIAL_ENTRIES.md) for model fields, VAT assumptions, date semantics, endpoints and limitations.
 
-- **Entries:** separate Income and Expenses UI, shared service rules where justified. Draft, Pending and Paid/Received are financial statuses.
-- **Recurring:** a proposal approval state separate from financial status. Generate monthly proposals on the 1st by default; introduce explicit scheduling, idempotency and transaction rules with the feature.
-- **Reports/VAT:** aggregate owned entries, country-specific policy boundary, Belgium first. Estimates must be clearly distinguished from filed tax returns.
-- **Document recognition:** optional worker/adapter preparing suggested entries for user confirmation. Temporary processing, no permanent document archive. Optional learning and Ollama must not be runtime prerequisites.
-- **Authentication:** Sentinel is an OIDC identity provider. Future integration uses discovery/JWKS and verifies issuer, audience, expiry and signatures; no direct Sentinel database access. Choose secure web session and CSRF handling as part of that implementation. No authentication, authorization, organization or RBAC framework exists today.
+Income/expense type is fixed by its route; detail/update/delete queries always include that type. Monetary calculations use Decimal and NUMERIC; frontend previews use decimal.js. VAT does not imply deductibility. Financial status and future recurring approval are separate concepts.
 
-## UI and hosting
+Alembic keeps baseline 0001 and adds revision 0002 without recreating the database. Model metadata is imported for consistency checking. Session advisory locking serializes online migration processes, including version-table initialization. API container startup runs migrations before starting its HTTP process, so failed migrations block new readiness. Future deployments with replicas may move this into a dedicated release step while retaining the lock.
 
-CSS variables own colors and radii. The small Button component follows shadcn/ui composition with Radix Slot; `components.json` supports future shadcn additions. Lucide supplies icons. Recharts is installed for future real charts; empty views draw no fictional time series. Dark theme tokens can be added later.
+Liveness is process-only. Readiness checks database connectivity. Central errors include a request ID and optional field messages without raw database errors. JSON application logs include request timing and IDs. CORS has only explicitly configured origins; normal web access uses the same origin.
 
-Compose runs one API process with migrations before startup, appropriate for this foundation. Multiple API replicas require a separate one-shot migration deployment step. Containers run as non-root users. `compose.yaml` builds locally and binds web to loopback; `compose.dev.yaml` adds a loopback database port for native development. The separate image-only `docker-compose.yml` publishes web on the host LAN and keeps API/database internal. Main CI publishes GHCR images only after the reusable checks pass. Deployment, registry access and backup instructions are in [DEPLOYMENT.md](DEPLOYMENT.md). The application has no authentication yet; keep it on a trusted LAN/private network.
+## Hosting and checks
+
+`compose.yaml` builds locally with loopback web publication; `compose.dev.yaml` adds a loopback DB port for native development. `docker-compose.yml` pulls prebuilt images, accepts LAN web access and keeps API/database internal. No new mandatory services or environment variables were added. See [DEVELOPMENT.md](DEVELOPMENT.md) and [DEPLOYMENT.md](DEPLOYMENT.md).
+
+Main publishing is gated by frontend checks, backend tests, PostgreSQL migrations and Compose startup. The image-only Compose check also runs real browser financial flows. Native API integration tests use transaction/savepoint isolation; default unit tests need no database. Browser form tests cover errors/date behavior and requested screen widths; separate live tests exercise persisted records through web and API.
+
+## Future modules
+
+- **Cash flow/reporting:** aggregate persisted, non-deleted entries with correct draft/pending/paid rules and explicit currency policy. Dashboard summaries are deliberately not calculated yet. VAT reporting stays separate from cash flow.
+- **Recurring:** monthly generation on the 1st by default, idempotent proposals and separate approval state. Nothing is scheduled today.
+- **VAT policy:** country-specific treatment, Belgium first, plus explicit deductibility. Existing rates/amounts remain snapshots on entries.
+- **Recognition:** optional temporary document processing that proposes entries for confirmation, no permanent archive. OCR learning/Ollama remain optional and absent today.
+- **Authentication:** Sentinel OIDC discovery/JWKS, issuer/audience/signature/expiry validation, secure sessions and CSRF handling. No direct access to Sentinel's database, no organization/RBAC framework and no authentication implemented yet.

@@ -1,19 +1,27 @@
 # Product scope
 
-Ficka is financial-first, self-hosted small-business software. Today it supplies infrastructure and a usable empty shell only.
+Ficka is self-hosted small-business financial tracking software.
 
-## Included in Task 01
+## Available now
 
-Dashboard, Income, Expenses, Recurring, Reports and Settings routes; navigation; responsive light theme; neutral empty KPI/chart/category/payment areas; a compact recurring approval explanation; backend readiness integration; API/database/migration infrastructure; development checks and documentation.
+- Responsive application shell and six navigation routes with a fluid desktop main area.
+- Separate persistent Income and Expenses workflows: create, details, edit, status confirmation and soft deletion.
+- Server-backed entry-date ranges, status/category filters, text search, sorting and pagination.
+- Centered, scrolling create/edit dialogs with linked creation dates, independent edit dates, precise VAT preview, inline errors and unsaved-change confirmation.
+- Reusable income/expense categories in Settings, including custom names, colors, archiving and restoration.
+- PostgreSQL NUMERIC/Decimal amounts, UUID records, timezone-aware metadata and Alembic migrations.
+- Versioned API, typed same-origin integration, health checks, tests and image-based deployment.
 
-The period selector changes the empty dashboard's selected scope. No entries exist, no amount is calculated, and no financial operations are implied by navigation links. Secondary pages explicitly explain future availability.
+The dashboard keeps its layout but explicitly leaves financial summaries uncalculated. It shows no fabricated business totals. Recurring and Reports remain explanatory future pages. Company configuration and authentication are not yet implemented.
 
-## Planned
+## Financial semantics
 
-Income/expense management with Draft, Pending and Paid/Received statuses; recurring proposal generation (monthly on the 1st by default) and separate human approval; cash-flow visualization; reporting and country-configurable VAT, initially Belgium; Sentinel OIDC sign-in; optional OCR-assisted preparation requiring confirmation.
+Draft entries are excluded from calculations. Pending entries represent expected movement; paid entries represent actual movement, labeled Received for income. Approval state remains a separate future concept. Both entry and payment dates are stored; expected/actual payment date currently shares one field. Details and limits are in [FINANCIAL_ENTRIES.md](FINANCIAL_ENTRIES.md).
 
-Document processing is temporary, without permanent storage. Optional OCR learning and Ollama integrations must leave the main application functional when disabled.
+Belgium and EUR are defaults, with suggested VAT rates and manual overrides. This is basic VAT recording, not a tax engine or deductibility determination.
 
-## Excluded
+## Planned, not implemented
 
-Full accounting, financial tables, authentication, generic tenancy, organization/RBAC, Redis, Celery, Ollama, PaddleOCR and permanent document archives are outside this foundation. No scheduled financial action happens today.
+Recurring proposal generation (monthly on the 1st by default) with separate human approval; dashboard aggregation and cash-flow charts; reports and country-aware VAT policy; Sentinel OIDC; temporary OCR-assisted preparation requiring user confirmation. Optional OCR learning and Ollama must never be main-application prerequisites.
+
+Partial payments, immutable edit history, soft-delete restoration, FX and currency-specific minor units, business timezone settings and advanced VAT treatments are not available. No generic organization/RBAC or multi-tenant framework is introduced. Redis, Celery, permanent document archives and heavy recognition services remain outside scope.

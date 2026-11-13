@@ -54,7 +54,7 @@ export function Dashboard() {
               <p>
                 {label === "VAT estimate"
                   ? "Available when VAT is configured"
-                  : "No entries for this period"}
+                  : "Summary not calculated yet"}
               </p>
             </div>
           );
@@ -70,10 +70,10 @@ export function Dashboard() {
             <div className="chart-grid" aria-hidden="true" />
             <div className="empty-content">
               <ChartNoAxesCombined size={29} />
-              <h3>Your story starts with an entry</h3>
+              <h3>Your cash flow, at a glance</h3>
               <p>
-                Track income and expenses to see how money
-                <br className="desktop-break" /> moves through your business.
+                Record income and expenses now. Cash-flow reporting
+                <br className="desktop-break" /> will arrive in a future update.
               </p>
               <Button asChild size="sm">
                 <Link href="/income">
@@ -104,9 +104,9 @@ export function Dashboard() {
             </div>
             <h3>Make sense of your spending</h3>
             <p>
-              Categories will appear here once
+              Category reporting will appear here
               <br />
-              you record your first expense.
+              in a future update.
             </p>
             <Link className="text-link" href="/expenses">
               Explore expenses <ArrowRight size={14} />
@@ -147,7 +147,8 @@ export function Dashboard() {
         </Link>
       </aside>
       <footer className="page-footer">
-        A fresh start. Your financial overview will grow with your business.
+        Income and expense tracking is available. Dashboard calculations are not
+        implemented yet.
       </footer>
     </>
   );
