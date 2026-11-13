@@ -14,7 +14,7 @@ Amounts use PostgreSQL `NUMERIC(14,2)` and Python Decimal. VAT rates use `NUMERI
 
 Core fields remain required even for a draft. Status changes are allowed in either direction to support correction. There is no approval state or recurring processing in this implementation. Overdue is derived in the UI when a pending entry's payment date precedes the browser's current date; it is not a database status.
 
-No dashboard aggregation engine is implemented. Dashboard positions remain neutral and explicitly say summaries are not calculated. Entries must never be summed across currencies without a future conversion policy. Future actual cash flow must select only paid, non-deleted entries; VAT reporting is a separate calculation boundary.
+Dashboard and Reports now aggregate persisted records through the read-only reporting service. Actual cash flow selects only paid, non-deleted EUR entries by payment date; Pending movements remain separate. Recorded VAT is a separate entry-date illustration, not tax payable. Non-EUR entries are counted as exclusions and never silently combined. See [REPORTING.md](REPORTING.md).
 
 ## Date behavior
 

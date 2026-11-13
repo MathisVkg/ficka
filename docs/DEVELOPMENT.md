@@ -165,3 +165,11 @@ Remove-Item Env:FICKA_E2E_BASE_URL
 This configuration does not start its own web server. CI runs it against the image-only Compose stack after migration. It writes clearly named test entries, checks persistence and soft deletion, tests category changes and server pagination. Ordinary `pnpm test` uses mocked API boundaries for deterministic form/error tests and verifies fluid layout at 1920, 1440, 1024, 768 and 390px.
 
 Migration downgrade tests are only for disposable databases: downgrading 0002 removes all financial tables and data. Concurrent online migration processes serialize through a PostgreSQL advisory lock. A failed upgrade keeps the new API container from starting its server. No production database was reset as part of Task 02.
+
+## Reporting development (Task 03)
+
+No new migrations or environment variables are required; use the existing migrated 0002 database. Reporting queries and schemas are separate from entry CRUD in `app/services/reporting.py`, `app/schemas/reporting.py` and `app/api/v1/reporting.py`. The full contract is in [REPORTING.md](REPORTING.md).
+
+`uv run pytest` includes database-free calendar/Decimal/percentage tests. With `RUN_DB_TESTS=1`, the existing integration command also verifies real aggregates, status/date/currency exclusions, VAT overrides, empty data and query counts against PostgreSQL. It runs within disposable/savepoint-isolated test transactions.
+
+`pnpm test` includes populated/empty dashboards, shared period controls, grouping and VAT year, error/retry behavior, stale-total hiding, exact money text, pending deep links and five viewport widths. The existing live Playwright configuration includes a persisted-entry report test with exact expected totals. Use only a disposable stack for live test writes. The deployment workflow file itself is unchanged and already runs these test directories.

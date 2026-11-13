@@ -24,9 +24,17 @@ Liveness is process-only. Readiness checks database connectivity. Central errors
 
 Main publishing is gated by frontend checks, backend tests, PostgreSQL migrations and Compose startup. The image-only Compose check also runs real browser financial flows. Native API integration tests use transaction/savepoint isolation; default unit tests need no database. Browser form tests cover errors/date behavior and requested screen widths; separate live tests exercise persisted records through web and API.
 
+## Financial reporting
+
+The read-only reporting service in `app/services/reporting.py` performs SQL aggregates and Decimal arithmetic independently of presentation. Versioned endpoints use explicit reporting schemas with decimal-string serialization. Actual cash uses paid/received payment dates; pending projections are separate; recorded VAT groups non-draft records by entry date. All queries exclude soft-deleted rows and restrict monetary aggregates to EUR, returning non-EUR exclusion counts. Cash buckets are zero-filled on calendar month/Monday-week boundaries.
+
+Dashboard and Reports use typed same-origin requests through the existing adapter, allowlisting the six GET report endpoints. Recharts uses numeric coordinates only for display; exact amounts, shares and tooltips come from backend values. Request cancellation and keyed loading states prevent old period totals being displayed under new dates. Entry deep links reuse the existing financial detail modal without redesigning Income or Expenses.
+
+No migration or deployment architecture change was required. Full rules, API contracts and limitations are in [REPORTING.md](REPORTING.md).
+
 ## Future modules
 
-- **Cash flow/reporting:** aggregate persisted, non-deleted entries with correct draft/pending/paid rules and explicit currency policy. Dashboard summaries are deliberately not calculated yet. VAT reporting stays separate from cash flow.
+- **Advanced reporting:** exports, FX, account balances, live refresh and immutable historical snapshots. Current dashboard/cash-flow/category reports are implemented; recorded VAT remains separate and illustrative.
 - **Recurring:** monthly generation on the 1st by default, idempotent proposals and separate approval state. Nothing is scheduled today.
 - **VAT policy:** country-specific treatment, Belgium first, plus explicit deductibility. Existing rates/amounts remain snapshots on entries.
 - **Recognition:** optional temporary document processing that proposes entries for confirmation, no permanent archive. OCR learning/Ollama remain optional and absent today.

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { reportFixture } from "./helpers/report-fixtures";
 const cat = {
   id: "00000000-0000-0000-0000-000000000001",
   name: "Services",
@@ -32,6 +33,10 @@ async function mockApi(page: Page, populated = false) {
   await page.route("**/api/v1/**", async (route) => {
     const request = route.request(),
       url = new URL(request.url());
+    if (url.pathname.includes("/reports/"))
+      return route.fulfill({
+        json: reportFixture(url.pathname.split("/").pop()!, url.searchParams),
+      });
     if (url.pathname.endsWith("/categories"))
       return route.fulfill({ json: [cat] });
     if (request.method() === "DELETE") {

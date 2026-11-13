@@ -4,10 +4,27 @@ type Context = { params: Promise<{ path: string[] }> };
 async function forward(request: NextRequest, context: Context) {
   const { path } = await context.params;
   const [resource, id] = path;
+  const reportRoute =
+    resource === "reports" &&
+    path.length === 2 &&
+    [
+      "summary",
+      "cash-flow",
+      "expense-categories",
+      "income-categories",
+      "pending",
+      "vat",
+    ].includes(id);
+  if (reportRoute && request.method !== "GET")
+    return Response.json(
+      { error: { message: "Reports are read-only" } },
+      { status: 405, headers: { Allow: "GET" } },
+    );
   const allowed =
-    ["income", "expenses", "categories"].includes(resource) &&
-    path.length <= 2 &&
-    (!id || /^[0-9a-f-]{36}$/i.test(id));
+    reportRoute ||
+    (["income", "expenses", "categories"].includes(resource) &&
+      path.length <= 2 &&
+      (!id || /^[0-9a-f-]{36}$/i.test(id)));
   if (!allowed)
     return Response.json(
       { error: { message: "API route not found" } },

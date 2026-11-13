@@ -89,6 +89,32 @@ export function EntriesPage({ kind }: { kind: EntryType }) {
     );
     return () => controller.abort();
   }, [kind, query, version]);
+  useEffect(() => {
+    const controller = new AbortController();
+    const openLinkedEntry = () => {
+      const id = window.location.hash.match(/^#entry=([0-9a-f-]{36})$/i)?.[1];
+      if (!id) return;
+      api<Entry>(entryPath(kind) + "/" + id, {
+        signal: controller.signal,
+      }).then(
+        (value) => {
+          if (!controller.signal.aborted) setDetail(value);
+        },
+        (error) => {
+          if (!controller.signal.aborted)
+            setError(
+              error instanceof Error ? error.message : "Cannot open entry",
+            );
+        },
+      );
+    };
+    openLinkedEntry();
+    window.addEventListener("hashchange", openLinkedEntry);
+    return () => {
+      controller.abort();
+      window.removeEventListener("hashchange", openLinkedEntry);
+    };
+  }, [kind]);
   function refresh(message = "") {
     setNotice(message);
     setLoading(true);

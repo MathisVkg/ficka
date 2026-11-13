@@ -1,6 +1,6 @@
 # Ficka
 
-Self-hosted financial tracking for small businesses. Income and Expenses now support persistent entries, date/status management, precise VAT recording, filtering, pagination and safe deletion. Settings manages reusable categories. Dashboard reporting, recurring processing, OCR and sign-in remain future modules.
+Self-hosted financial tracking for small businesses. Income and Expenses now support persistent entries, date/status management, precise VAT recording, filtering, pagination and safe deletion. Settings manages reusable categories. Dashboard and Reports aggregate real EUR financial data. Recurring processing, OCR, sign-in and advanced VAT accounting remain future modules.
 
 ## Choose how to run it
 
@@ -43,7 +43,7 @@ Main pushes run all checks before publishing `ghcr.io/mathisvkg/ficka-web` and `
 
 ## Financial entry management
 
-After applying migrations, open Income or Expenses and use **New income** / **New expense**. Centered forms preserve edited payment dates and support VAT presets or manual amounts. Entries use Draft, Pending and Paid/Received states. Settings manages categories without deleting historical references. See [financial behavior and API](docs/FINANCIAL_ENTRIES.md). Dashboard calculations remain unimplemented and display no fabricated totals.
+After applying migrations, open Income or Expenses and use **New income** / **New expense**. Centered forms preserve edited payment dates and support VAT presets or manual amounts. Entries use Draft, Pending and Paid/Received states. Settings manages categories without deleting historical references. See [financial behavior and API](docs/FINANCIAL_ENTRIES.md). Dashboard and Reports show actual paid/received cash flow, separate pending projections, category breakdowns and illustrative recorded VAT. Non-EUR entries are excluded explicitly; no exchange rates or definitive tax liability are inferred. See [reporting rules and API](docs/REPORTING.md).
 
 Revision 0002 adds the financial tables and suggested categories without resetting the database. API image startup applies it before serving. Back up the database before redeploying matched API/web images through the existing Portainer workflow. No new services or environment variables are required.
 
@@ -52,3 +52,5 @@ Revision 0002 adds the financial tables and suggested categories without resetti
 Run `pnpm lint`, `pnpm typecheck`, `pnpm format:check`, `pnpm test`; backend checks are in [DEVELOPMENT.md](docs/DEVELOPMENT.md). Both dependency lockfiles are committed. Browser tests cover financial forms, desktop/mobile routes, date synchronization, save errors, deletion and five viewport widths. CI also tests real PostgreSQL, both Compose modes and browser flows against persisted entries.
 
 See [architecture](docs/ARCHITECTURE.md) and [product scope](docs/PRODUCT_SCOPE.md). No demo figures are displayed as company data. The application has no authentication yet; use a trusted LAN or private reverse proxy.
+
+Task 03 requires no schema migration or new service/configuration. Period, monthly/weekly cash-flow and annual VAT controls are functional; pending links reuse the existing entry details. Existing CI also verifies persisted reporting totals before image publication.

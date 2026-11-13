@@ -12,7 +12,7 @@ Ficka is self-hosted small-business financial tracking software.
 - PostgreSQL NUMERIC/Decimal amounts, UUID records, timezone-aware metadata and Alembic migrations.
 - Versioned API, typed same-origin integration, health checks, tests and image-based deployment.
 
-The dashboard keeps its layout but explicitly leaves financial summaries uncalculated. It shows no fabricated business totals. Recurring and Reports remain explanatory future pages. Company configuration and authentication are not yet implemented.
+Dashboard and Reports now show real EUR financial aggregates, actual/expected cash-flow views, category breakdowns, recorded VAT quarters and pending movements. Filters, zero-filled timelines, currency exclusions and appropriate empty/error states are implemented. VAT remains illustrative. Recurring remains an explanatory future page; company configuration and authentication are not implemented.
 
 ## Financial semantics
 
@@ -22,6 +22,8 @@ Belgium and EUR are defaults, with suggested VAT rates and manual overrides. Thi
 
 ## Planned, not implemented
 
-Recurring proposal generation (monthly on the 1st by default) with separate human approval; dashboard aggregation and cash-flow charts; reports and country-aware VAT policy; Sentinel OIDC; temporary OCR-assisted preparation requiring user confirmation. Optional OCR learning and Ollama must never be main-application prerequisites.
+Recurring proposal generation (monthly on the 1st by default) with separate human approval; report exports, FX/account balances and advanced country-aware VAT policy; Sentinel OIDC; temporary OCR-assisted preparation requiring user confirmation. Optional OCR learning and Ollama must never be main-application prerequisites.
 
 Partial payments, immutable edit history, soft-delete restoration, FX and currency-specific minor units, business timezone settings and advanced VAT treatments are not available. No generic organization/RBAC or multi-tenant framework is introduced. Redis, Celery, permanent document archives and heavy recognition services remain outside scope.
+
+Reporting rules, API endpoints and limitations are documented in [REPORTING.md](REPORTING.md).

@@ -5,7 +5,7 @@ test("all navigation routes share the shell", async ({ page, isMobile }) => {
     page.getByRole("heading", { name: "Dashboard", exact: true }),
   ).toBeVisible();
   await expect(
-    page.getByLabel("Financial overview").getByLabel("No data"),
+    page.getByLabel("Financial overview").getByTestId(/^kpi-/),
   ).toHaveCount(4);
   for (const label of [
     "Income",
@@ -48,6 +48,6 @@ test("connection failure stays in the shell and can be retried", async ({
   await page.route("**/api/health/ready", (route) =>
     route.fulfill({ json: { status: "ready" } }),
   );
-  await page.getByRole("button", { name: "Retry" }).click();
+  await page.getByRole("button", { name: "Retry", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("All systems connected");
 });
