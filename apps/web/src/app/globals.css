@@ -27,9 +27,11 @@ body {
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
-a {
-  text-decoration: none;
-  color: inherit;
+@layer base {
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
 }
 button,
 select {
