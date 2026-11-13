@@ -1,0 +1,5 @@
+pnpm-lock.yaml
+uv.lock
+.next
+node_modules
+.venv

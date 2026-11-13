@@ -1,0 +1,17 @@
+{
+  "name": "ficka",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "scripts": {
+    "dev": "pnpm --filter @ficka/web dev",
+    "build": "pnpm --filter @ficka/web build",
+    "lint": "pnpm --filter @ficka/web lint",
+    "typecheck": "pnpm --filter @ficka/web typecheck",
+    "test": "pnpm --filter @ficka/web test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "3.10.1"
+  }
+}
