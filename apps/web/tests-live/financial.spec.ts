@@ -59,12 +59,18 @@ for (const [path, noun] of [
       await page
         .getByRole("button", { name: "Delete " + title, exact: true })
         .click();
+      const deletion = page.waitForResponse(
+        (response) =>
+          response.request().method() === "DELETE" &&
+          response.url().endsWith("/api/v1/" + path + "/" + stored.items[0].id),
+      );
       await page
         .getByRole("button", { name: "Delete entry", exact: true })
         .click();
       await expect(
         page.getByRole("button", { name: title, exact: true }),
       ).toHaveCount(0);
+      expect((await deletion).ok()).toBeTruthy();
       expect(
         (
           await request.get("/api/v1/" + path + "/" + stored.items[0].id)

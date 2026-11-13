@@ -266,6 +266,15 @@ test("populated dashboard and reports fit all required viewport widths", async (
           () => document.documentElement.scrollWidth <= innerWidth,
         ),
       ).toBeTruthy();
+      for (const value of await page.locator(".report-kpis .kpi-value").all()) {
+        expect(
+          await value.evaluate((node) => {
+            const range = document.createRange();
+            range.selectNodeContents(node);
+            return range.getClientRects().length;
+          }),
+        ).toBe(1);
+      }
       const bounds = await page.locator("main").boundingBox();
       expect(Math.abs(bounds!.x + bounds!.width - width)).toBeLessThan(2);
       expect(await page.locator("main").innerText()).not.toMatch(
