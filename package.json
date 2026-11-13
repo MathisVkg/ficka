@@ -3,13 +3,15 @@
   "private": true,
   "packageManager": "pnpm@11.25.0",
   "scripts": {
-    "dev": "pnpm --filter @ficka/web dev",
+    "dev": "node scripts/dev-web.mjs",
     "build": "pnpm --filter @ficka/web build",
     "lint": "pnpm --filter @ficka/web lint",
     "typecheck": "pnpm --filter @ficka/web typecheck",
     "test": "pnpm --filter @ficka/web test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "dev:db": "docker compose -f compose.yaml -f compose.dev.yaml up -d --wait db",
+    "dev:db:stop": "docker compose -f compose.yaml -f compose.dev.yaml stop db"
   },
   "devDependencies": {
     "prettier": "3.10.1"

@@ -10,7 +10,7 @@ from app.core.config import get_settings
 @lru_cache
 def get_engine() -> Engine:
     return create_engine(
-        get_settings().database_url,
+        get_settings().connection_url,
         pool_pre_ping=True,
         connect_args={"connect_timeout": 3},
         hide_parameters=True,
