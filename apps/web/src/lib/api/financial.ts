@@ -108,9 +108,12 @@ export const statusLabel = (status: EntryStatus, kind: EntryType) =>
       ? "Pending"
       : "Draft";
 export const formatMoney = (amount: string, currency: string) =>
-  new Intl.NumberFormat("en-BE", { style: "currency", currency }).format(
-    Number(amount),
-  );
+  new Intl.NumberFormat("en-BE", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount));
 export const formatDate = (value: string) =>
   new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",

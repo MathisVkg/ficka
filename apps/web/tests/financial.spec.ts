@@ -285,3 +285,26 @@ test("saving disables entry editing and duplicate submission", async ({
   }
   await expect(dialog).toHaveCount(0);
 });
+
+test("currency display preserves the stored two-decimal precision", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.route("**/api/v1/income?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [{ ...entry, amount: "0.50", currency: "JPY" }],
+        total: 1,
+        page: 1,
+        page_size: 20,
+      },
+    }),
+  );
+  await page.goto("/income");
+  await expect(
+    page
+      .getByRole("row")
+      .filter({ hasText: "Design project" })
+      .locator(".amount-column"),
+  ).toContainText("0.50");
+});
