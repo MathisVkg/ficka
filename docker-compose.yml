@@ -1,0 +1,54 @@
+name: ficka
+
+services:
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:////data/ficka.db
+      TEMP_DIR: /tmp/ficka
+      DOCUMENT_TTL_HOURS: "24"
+      LOG_LEVEL: INFO
+    volumes:
+      - ficka-data:/data
+    tmpfs:
+      # Uploaded documents live only in memory while they are processed.
+      - /tmp/ficka:mode=1777
+    # Not published: only the web service can reach the API, inside this network.
+    expose:
+      - "8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+      # Public URL of the app (adapter-node uses it for form-action CSRF checks).
+      ORIGIN: http://localhost:3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:0.40.17
+    profiles:
+      - ai
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  ficka-data:
+  ollama-models:
