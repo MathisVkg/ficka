@@ -34,6 +34,8 @@ select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
 # FastAPI / Typer use function calls in default arguments by design.
 "app/cli.py" = ["B008"]
 "app/api/*.py" = ["B008"]
+# Generated migrations keep long SQL strings on one line.
+"migrations/versions/*.py" = ["E501"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -41,4 +43,5 @@ line-ending = "lf"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-ra"

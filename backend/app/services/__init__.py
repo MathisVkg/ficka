@@ -1,1 +1,1 @@
-"""Business logic services, one package per area. The database guards integrity; services own the rules."""
+"""Business logic, one package per area. The database guards integrity; services own rules."""
