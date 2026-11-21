@@ -1,0 +1,43 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+
+@theme {
+  /* Typography: Geist, self-hosted from npm (no external font service). */
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Colors */
+  --color-bg: #f7f6f2;
+  --color-surface: #ffffff;
+  --color-border: #e6e3dc;
+  --color-nav: #f2f0ea;
+  --color-ink: #1d1e20;
+  --color-muted: #5f5e58;
+  --color-accent: #1f5c5a;
+  --color-accent-hover: #163f3e;
+  --color-income: #2f6548;
+  --color-expense: #a8505b;
+  --color-warning: #8a5510;
+
+  /* Radii */
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Spacing: one step is 8px (p-1 = 8px, p-2 = 16px, p-0.5 = 4px). */
+  --spacing: 8px;
+}
+
+/* Tabular figures, for every amount. */
+@utility amount {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-bg font-sans text-ink antialiased;
+  }
+}
