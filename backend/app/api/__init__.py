@@ -1,8 +1,14 @@
-"""HTTP routers, all mounted under /api."""
+"""HTTP routers, all mounted under /api.
+
+Public: `GET /api/health` and `POST /api/auth/login`. Every other router must be
+built with `app.api.deps.protected_router()`.
+"""
 
 from fastapi import APIRouter
 
-from app.api import health
+from app.api import auth, health
 
 api_router = APIRouter(prefix="/api")
 api_router.include_router(health.router)
+api_router.include_router(auth.public_router)
+api_router.include_router(auth.router)
