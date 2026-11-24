@@ -1,3 +1,13 @@
+# Ficka — local use: builds the images from ./backend and ./frontend.
+#
+# For the server (Portainer, prebuilt images from GHCR, no build on the server),
+# use deploy/portainer-compose.yml instead; keep the two files structurally
+# aligned (same services, volumes, healthchecks).
+#
+# Optional variables (no variables are needed for local use):
+#   FICKA_PORT  host port for the web app (default 3000)
+#   ORIGIN      URL used in the browser (default http://localhost:3000)
+
 name: ficka
 
 services:
@@ -17,6 +27,8 @@ services:
     # Not published: only the web service can reach the API, inside this network.
     expose:
       - "8000"
+    networks:
+      - ficka
     healthcheck:
       test:
         - CMD
@@ -34,9 +46,11 @@ services:
     environment:
       API_URL: http://api:8000
       # Public URL of the app (adapter-node uses it for form-action CSRF checks).
-      ORIGIN: http://localhost:3000
+      ORIGIN: "${ORIGIN:-http://localhost:3000}"
     ports:
-      - "3000:3000"
+      - "${FICKA_PORT:-3000}:3000"
+    networks:
+      - ficka
     depends_on:
       api:
         condition: service_healthy
@@ -48,7 +62,15 @@ services:
     restart: unless-stopped
     volumes:
       - ollama-models:/root/.ollama
+    networks:
+      - ficka
 
 volumes:
   ficka-data:
+    name: ficka-data
   ollama-models:
+    name: ficka-ollama-models
+
+networks:
+  ficka:
+    name: ficka
