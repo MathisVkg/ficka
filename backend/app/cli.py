@@ -6,7 +6,6 @@ from pathlib import Path
 import typer
 from alembic import command
 from alembic.config import Config
-from argon2 import PasswordHasher
 from sqlalchemy.engine import make_url
 from sqlmodel import Session, select
 
@@ -14,8 +13,8 @@ from app.config import BACKEND_DIR, get_settings
 from app.db import get_engine
 from app.models import AppUser, Company, UserCompany, UserRole
 from app.seed import run_seed
-
-MIN_PASSWORD_LENGTH = 8
+from app.services import auth
+from app.services.auth import MIN_PASSWORD_LENGTH
 
 cli = typer.Typer(no_args_is_help=True, add_completion=False, help="Ficka administration.")
 
@@ -74,10 +73,10 @@ def _prompt_email(value: str | None) -> str:
         value = None
 
 
-def _prompt_password(value: str | None) -> str:
+def _prompt_password(value: str | None, label: str = "Password") -> str:
     while True:
         if value is None:
-            value = typer.prompt("Password", hide_input=True, confirmation_prompt=True)
+            value = typer.prompt(label, hide_input=True, confirmation_prompt=True)
         if len(value) >= MIN_PASSWORD_LENGTH:
             return value
         typer.secho(
@@ -115,7 +114,7 @@ def init(
     email = _prompt_email(email)
     display_name = _prompt_text("Display name", display_name)
     password = _prompt_password(password)
-    password_hash = PasswordHasher().hash(password)  # argon2id with library defaults
+    password_hash = auth.hash_password(password)  # argon2id
 
     with Session(engine) as session:
         # VAT country first: company.country_code references it.
@@ -133,6 +132,32 @@ def init(
     typer.secho(
         f"Created company '{company_name}' with owner {email} "
         f"({result.categories} categories seeded).",
+        fg=typer.colors.GREEN,
+    )
+
+
+@cli.command("reset-password")
+def reset_password(
+    email: str | None = typer.Option(None, help="Email of the account (asked if omitted)."),
+    password: str | None = typer.Option(
+        None, hidden=True, help="New password (asked, hidden, if omitted)."
+    ),
+) -> None:
+    """Set a new password for an account and sign out all its sessions."""
+    refuse_foreign_owner()
+    email = _prompt_email(email)
+    with Session(get_engine()) as session:
+        user = session.exec(select(AppUser).where(AppUser.email == email)).first()
+        if user is None:
+            typer.secho(f"No account with the email {email}.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
+        new_password = _prompt_password(password, "New password")
+        auth.set_password(session, user, new_password)
+        assert user.id is not None
+        signed_out = auth.delete_all_sessions(session, user.id)
+
+    typer.secho(
+        f"Password changed for {email}; {signed_out} session(s) signed out.",
         fg=typer.colors.GREEN,
     )
 
