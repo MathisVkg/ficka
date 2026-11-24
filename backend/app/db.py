@@ -33,7 +33,12 @@ def ensure_sqlite_dir(database_url: str) -> None:
 
 def build_engine(database_url: str) -> Engine:
     ensure_sqlite_dir(database_url)
-    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    # use_insertmanyvalues=False: batched INSERT..RETURNING needs a NOT NULL "sentinel"
+    # primary key, but our INTEGER PRIMARY KEY columns are nullable to match
+    # docs/schema.sql exactly. Rows are then inserted one by one (fine for SQLite).
+    engine = create_engine(
+        database_url, connect_args={"check_same_thread": False}, use_insertmanyvalues=False
+    )
     event.listen(engine, "connect", _set_sqlite_pragmas)
     return engine
 
