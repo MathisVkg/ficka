@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     temp_dir: Path = Field(default_factory=lambda: Path(tempfile.gettempdir()) / "ficka")
     document_ttl_hours: int = Field(default=24, gt=0)
     log_level: str = "INFO"
+    # Serve /api/docs and /api/openapi.json (unauthenticated). Development only.
+    api_docs: bool = False
 
 
 @lru_cache
