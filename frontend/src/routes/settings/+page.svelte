@@ -1,30 +1,37 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import Button from '#lib/components/Button.svelte';
+  import CategoriesSection from '#lib/components/CategoriesSection.svelte';
   import TextField from '#lib/components/TextField.svelte';
   import { formString } from '#lib/forms.js';
   import type { PageProps } from './$types';
-  import type { PasswordErrors } from './+page.server';
+  import type { CategoryResult, PasswordErrors } from './+page.server';
 
   const MIN_PASSWORD_LENGTH = 8;
 
-  let { form }: PageProps = $props();
+  let { data, form }: PageProps = $props();
+
+  type FormResult = {
+    password?: { errors: PasswordErrors; success: boolean };
+    category?: CategoryResult;
+  };
+  const result = $derived((form ?? null) as FormResult | null);
 
   let clientErrors = $state<PasswordErrors>({});
   let submitting = $state(false);
 
-  const errors = $derived<PasswordErrors>({ ...form?.password?.errors, ...clientErrors });
-  const success = $derived(form?.password?.success === true);
+  const errors = $derived<PasswordErrors>({ ...result?.password?.errors, ...clientErrors });
+  const success = $derived(result?.password?.success === true);
 </script>
 
 <svelte:head>
   <title>Settings · Ficka</title>
 </svelte:head>
 
-<div class="flex max-w-[640px] flex-col gap-4">
-  <h1 class="text-2xl font-semibold tracking-tight">Settings</h1>
+<div class="flex max-w-[760px] flex-col gap-4">
+  <h1 class="text-3xl font-semibold tracking-tight">Settings</h1>
 
-  <!-- Account. Later settings sections go below as further <section> blocks. -->
+  <!-- Sections: Account, Categories. Later settings sections go below as further <section> blocks. -->
   <section
     aria-labelledby="settings-account"
     class="rounded-xl border border-border bg-surface p-3 md:p-4"
@@ -96,4 +103,10 @@
       </div>
     </form>
   </section>
+
+  <CategoriesSection
+    categories={data.categories}
+    rates={data.rates}
+    result={result?.category ?? null}
+  />
 </div>
