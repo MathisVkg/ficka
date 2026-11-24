@@ -91,6 +91,18 @@ The decisions settled during planning (November 2026). Change one only on purpos
 - Portainer deploys `deploy/portainer-compose.yml` (Stacks → Repository), which only pulls the images. `docker-compose.yml` stays for local builds; the two files are kept aligned.
 - GHCR is used at deploy time only; the running app has no external dependency.
 
+## Authentication
+
+- **One local account** (v1), created by `python -m app.cli init`. No registration page, no roles, no email, no 2FA.
+- **FastAPI owns authentication**: password verification (argon2id, rehashed on login when the parameters change), sessions and users. **The browser only talks to SvelteKit**, which keeps the session token in a cookie and sends it to the API server-side as `Authorization: Bearer <token>`. The API is never reachable from the browser, in development or in Docker.
+- **Token:** 32 random bytes (`secrets.token_urlsafe`). The database stores only `sha256(token)` in `auth_session.id`; the raw token exists only in the cookie and in the SvelteKit → API call, and is never logged.
+- **Cookie** `ficka_session`: `HttpOnly`, `SameSite=Lax`, `Path=/`, `Secure` when the request is HTTPS (so plain HTTP on the LAN works), `Max-Age` = the session lifetime.
+- **Lifetime:** 30 days, sliding. A session used with less than 15 days left is extended to 30 days. Expired sessions are rejected and deleted on lookup, and purged at API startup.
+- **Protected by default:** every page except `/login` redirects to `/login?next=…` without a session (the `next` target must be a same-site relative path). Every API route except `GET /api/health` and `POST /api/auth/login` requires a token: routers are built with `protected_router()`, and a test walks all routes to enforce it.
+- **CSRF:** SvelteKit's built-in origin check on form actions (hence `ORIGIN` must match the browser URL), plus `SameSite=Lax`. Logout is a POST form action, never a GET link.
+- **Login protection:** 5 failed attempts per (email, client IP) within 15 minutes → HTTP 429. The limiter is in memory (one API process). The client IP comes from SvelteKit in `X-Ficka-Client-IP`, trusted only because the API isn't publicly reachable. Unknown emails still cost one argon2 verification, and the error never says which field is wrong.
+- **Password change** (Settings → Account) signs out the user's other sessions. **Recovery** is `python -m app.cli reset-password` in the API container, which signs out every session.
+
 ## Design
 
 - Professional and calm: a warm off-white background (`#F7F6F2`), white surfaces with thin borders (no heavy shadows), lots of space.

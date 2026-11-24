@@ -28,7 +28,8 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. The navigation shows "API connected" when the frontend reaches the backend.
+Open <http://localhost:5173> and sign in with the account created by `init` (see [First login](#first-login)). The navigation shows "API connected" when the frontend reaches the backend.
+The browser only ever talks to SvelteKit; SvelteKit calls the API server-side, through `API_URL`.
 
 Useful commands:
 
@@ -55,6 +56,7 @@ Configuration is read from environment variables (or `backend/.env`):
 | `TEMP_DIR` | system temp folder + `ficka` | where uploaded documents live while they are processed |
 | `DOCUMENT_TTL_HOURS` | `24` | how long an abandoned upload is kept |
 | `LOG_LEVEL` | `INFO` | log level |
+| `API_DOCS` | `false` | serve the interactive API docs at `/api/docs` (development only: they need no login) |
 | `API_URL` (frontend) | `http://localhost:8000` | internal URL SvelteKit uses to reach the API |
 
 ## Docker (local build)
@@ -119,6 +121,43 @@ The server never builds anything. On every push to `main`, GitHub Actions builds
    - *Image pull denied / not found*: the package is private and Portainer has no `ghcr.io` registry credential (step 2), or the workflow hasn't published that tag yet.
    - *`init` says "Running as root"*: the console was opened as `root`; reconnect with the default user.
    - *The web app says "API unavailable"*: check the `api` container logs in Portainer.
+
+## First login
+
+Ficka has a single account, created by `python -m app.cli init` (there's no registration page).
+
+1. Open Ficka in the browser: <http://localhost:5173> in development, <http://localhost:3000> with the local Docker setup, or your `ORIGIN` URL on the server. Every page redirects to the sign-in page until you're logged in.
+2. Sign in with the email and password you gave to `init`. You stay signed in for 30 days; each visit in the second half of that period extends it again.
+3. **Log out** is at the bottom of the navigation. To change your password, open **Settings** → **Account**. Changing it signs out your other sessions (other browsers and devices).
+
+After 5 wrong passwords for the same email from the same address, sign-in is blocked for 15 minutes ("Too many attempts").
+
+## Forgot password
+
+There's no email reset: the password is reset from the command line, in the `api` container. This also signs out every session of that account.
+
+- **Portainer:** **Containers** → `api` → **Console**, keep the default user (never `root`), connect with `/bin/sh`, then run:
+
+  ```sh
+  python -m app.cli reset-password
+  ```
+
+  It asks for the email and the new password (hidden, twice).
+
+- **Local Docker:**
+
+  ```powershell
+  docker compose exec api python -m app.cli reset-password
+  ```
+
+- **Development:**
+
+  ```powershell
+  cd backend
+  uv run python -m app.cli reset-password
+  ```
+
+For scripting, `--email` can be given as an option (the password is still asked unless the hidden `--password` option is used, which leaves it in your shell history).
 
 ## Project structure
 
