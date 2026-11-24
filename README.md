@@ -48,6 +48,17 @@ npm run lint
 npm run build
 ```
 
+### Demo data (development only)
+
+To try the ledger without typing a year of invoices, fill a development database with fictional data:
+
+```powershell
+cd backend
+uv run python -m app.cli demo-data --months 12
+```
+
+It creates about a dozen fictional counterparties (customers and suppliers) and realistic income and expenses over the last N months: rent, subscriptions, energy, customer invoices with mixed VAT rates, some paid, some partly paid, some unpaid or overdue. It refuses to run if the company already has entries; add `--force` to add more anyway. Don't run it on a real company's database.
+
 Configuration is read from environment variables (or `backend/.env`):
 
 | Variable | Default | Meaning |

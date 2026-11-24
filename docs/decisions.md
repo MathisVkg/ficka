@@ -24,6 +24,11 @@ The decisions settled during planning (November 2026). Change one only on purpos
 - **Categories:** a default set at install. All are editable in Settings, and the user can create custom ones. Deleting a category that is still in use requires reassigning its entries first.
 - All entries can be edited or deleted.
 - **Currency:** EUR only in v1. The field exists.
+- **Money arithmetic uses integers only** (cents, basis points), in Python and TypeScript. The frontend repeats the VAT calculation for the live preview (`#lib/money.ts`); the server's result is authoritative, and both run the same test vectors.
+- **Company scoping:** every service function takes the company id; a resource of another company answers 404, as if it didn't exist.
+- **API errors** have one format: `{"error": {"code", "message", "fields"}}`, with codes `validation_error` (422), `not_found` (404), `conflict` (409), `unauthorized` (401), `rate_limited` (429). `fields` uses dotted paths matching the request body (`lines.0.vat_rate_bp`).
+- **Warnings** are allowed but worth telling (`duplicate_invoice_number`, `missing_category`, `missing_counterparty`); entry responses carry them in `warnings`, and they never block saving.
+- **Belgian identifiers** (VAT number, IBAN, structured reference) are normalized and checked on input, stored compact, and shown grouped.
 
 ## VAT
 
