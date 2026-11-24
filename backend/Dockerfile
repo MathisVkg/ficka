@@ -22,9 +22,12 @@ ENV PATH="/app/.venv/bin:$PATH" \
     DATABASE_URL=sqlite:////data/ficka.db \
     TEMP_DIR=/tmp/ficka
 
-RUN useradd --system --uid 1000 --no-create-home ficka \
+# The API runs as user "ficka" (uid/gid 1000). /data is created and owned by that
+# user in the image, so a new named volume mounted there inherits the ownership.
+RUN groupadd --system --gid 1000 ficka \
+    && useradd --system --uid 1000 --gid 1000 --no-create-home --home-dir /nonexistent ficka \
     && mkdir -p /data /tmp/ficka \
-    && chown ficka /data /tmp/ficka
+    && chown 1000:1000 /data /tmp/ficka
 USER ficka
 
 EXPOSE 8000
