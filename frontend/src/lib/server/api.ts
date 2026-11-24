@@ -73,8 +73,7 @@ function failure(payload: unknown, status: number): ApiFailure {
       status,
       code: typeof code === 'string' ? code : 'error',
       message: typeof message === 'string' ? message : fallback,
-      fields:
-        fields && typeof fields === 'object' ? (fields as Record<string, string>) : ({} as never),
+      fields: fields && typeof fields === 'object' ? (fields as Record<string, string>) : {},
       extra,
       unreachable: false
     };
