@@ -162,6 +162,43 @@ def reset_password(
     )
 
 
+@cli.command("demo-data")
+def demo_data(
+    months: int = typer.Option(12, min=1, max=60, help="How many months of history."),
+    force: bool = typer.Option(False, "--force", help="Add data even if entries exist."),
+) -> None:
+    """Development helper: fictional counterparties and entries over the last months."""
+    from app import demo
+    from app.models import Entry
+    from app.services.clock import today
+
+    refuse_foreign_owner()
+    with Session(get_engine()) as session:
+        company = session.exec(select(Company).order_by(Company.id)).first()
+        if company is None:
+            typer.secho("No company yet: run `init` first.", fg=typer.colors.RED, err=True)
+            raise typer.Exit(code=1)
+        has_entries = session.exec(select(Entry.id).where(Entry.company_id == company.id)).first()
+        if has_entries is not None and not force:
+            typer.secho(
+                "This company already has entries. Use --force to add demo data anyway.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+        company_name = company.name
+        result = demo.generate(session, company, months, today())
+
+    typer.secho(f"Demo data for '{company_name}' ({months} months):", fg=typer.colors.GREEN)
+    typer.echo(f"  {result.counterparties} counterparties created")
+    typer.echo(f"  {result.income} income entries, {result.expenses} expense entries")
+    typer.echo(
+        f"  {result.payments} payments; {result.unpaid} unpaid and {result.partial} partly paid"
+    )
+    for name, count in sorted(result.by_category.items()):
+        typer.echo(f"    {name}: {count}")
+
+
 @cli.command()
 def seed() -> None:
     """Re-run the idempotent seed (VAT rates, company settings, default categories)."""
