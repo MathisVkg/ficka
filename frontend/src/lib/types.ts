@@ -52,6 +52,17 @@ export interface CounterpartyListItem {
   open_balance_cents: number;
 }
 
+/** The counterparty form's fields, as text (what the inputs hold). */
+export interface CounterpartyFormValues {
+  name: string;
+  role: CounterpartyRole;
+  vat_number: string;
+  ibans: string[];
+  default_category_id: string;
+  default_vat_rate_bp: string;
+  notes: string;
+}
+
 export interface Counterparty {
   id: number;
   name: string;
