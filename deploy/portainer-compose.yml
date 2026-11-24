@@ -1,0 +1,80 @@
+# Ficka — server deployment through Portainer (Stacks → Repository).
+#
+# This file only PULLS prebuilt images from GHCR; nothing is built on the server.
+# The images are built by .github/workflows/images.yml on every push to main.
+# For local development with builds, use ../docker-compose.yml instead; keep the
+# two files structurally aligned (same services, volumes, healthchecks).
+#
+# Variables, set in the Portainer stack UI (no env_file):
+#   ORIGIN      required  URL used in the browser, e.g. http://<server-ip>:3000
+#   FICKA_PORT  optional  host port for the web app (default 3000)
+#   FICKA_TAG   optional  image tag (default latest; sha-xxxxxxx pins a version)
+
+name: ficka
+
+services:
+  api:
+    image: ghcr.io/mathisvkg/ficka-api:${FICKA_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:////data/ficka.db
+      TEMP_DIR: /tmp/ficka
+      DOCUMENT_TTL_HOURS: "24"
+      LOG_LEVEL: INFO
+    volumes:
+      - ficka-data:/data
+    tmpfs:
+      # Uploaded documents live only in memory while they are processed.
+      - /tmp/ficka:mode=1777
+    # Not published: only the web service can reach the API, inside this network.
+    expose:
+      - "8000"
+    networks:
+      - ficka
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  web:
+    image: ghcr.io/mathisvkg/ficka-web:${FICKA_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      API_URL: http://api:8000
+      # Public URL of the app (adapter-node uses it for form-action CSRF checks).
+      ORIGIN: "${ORIGIN:?ORIGIN must be set to the URL used in the browser, e.g. http://<server-ip>:3000}"
+    ports:
+      - "${FICKA_PORT:-3000}:3000"
+    networks:
+      - ficka
+    depends_on:
+      api:
+        condition: service_healthy
+
+  ollama:
+    image: ollama/ollama:0.40.17
+    profiles:
+      - ai
+    restart: unless-stopped
+    volumes:
+      - ollama-models:/root/.ollama
+    networks:
+      - ficka
+
+volumes:
+  ficka-data:
+    name: ficka-data
+  ollama-models:
+    name: ficka-ollama-models
+
+networks:
+  ficka:
+    name: ficka
