@@ -1,4 +1,4 @@
-import { API_URL } from '$app/env/private';
+import { api } from '#lib/server/api.js';
 import type { LayoutServerLoad } from './$types';
 
 interface Health {
@@ -7,15 +7,14 @@ interface Health {
   database: string;
 }
 
-export const load: LayoutServerLoad = async ({ fetch }) => {
-  try {
-    const response = await fetch(`${API_URL}/api/health`, { signal: AbortSignal.timeout(3000) });
-    if (!response.ok) {
-      return { api: { connected: false, version: null } };
+export const load: LayoutServerLoad = async (event) => {
+  const health = await api<Health>(event, '/api/health', { token: null, timeoutMs: 3000 });
+  return {
+    user: event.locals.user,
+    company: event.locals.company,
+    api: {
+      connected: health.ok && health.data.status === 'ok',
+      version: health.ok ? health.data.version : null
     }
-    const health = (await response.json()) as Health;
-    return { api: { connected: health.status === 'ok', version: health.version } };
-  } catch {
-    return { api: { connected: false, version: null } };
-  }
+  };
 };

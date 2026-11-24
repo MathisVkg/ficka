@@ -14,11 +14,6 @@ export default defineConfig({
       },
       adapter: adapter()
     })
-  ],
-  server: {
-    // Development convenience only: the app itself calls the API server-side through API_URL.
-    proxy: {
-      '/api': 'http://localhost:8000'
-    }
-  }
+  ]
+  // No /api proxy: the browser only talks to SvelteKit, which calls the API server-side.
 });
