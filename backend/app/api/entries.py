@@ -165,6 +165,8 @@ def _common(entry, paid, payment_status, counterparty_name, category_name) -> di
 def entry_out(session, company_id: int, entry_id: int, today: date, warnings=None) -> EntryOut:
     detail = service.entry_detail(session, company_id, entry_id, today)
     entry = detail.entry
+    if warnings is None:  # always report the current warnings
+        warnings = service.warnings_for(session, entry)
     return EntryOut(
         **_common(
             entry,
@@ -203,7 +205,7 @@ def entry_out(session, company_id: int, entry_id: int, today: date, warnings=Non
             )
             for p in detail.payments
         ],
-        warnings=[WarningOut(code=w.code, message=w.message) for w in (warnings or [])],
+        warnings=[WarningOut(code=w.code, message=w.message) for w in warnings],
     )
 
 
