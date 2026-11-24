@@ -1,10 +1,12 @@
 <script lang="ts">
   import { tick } from 'svelte';
   import { resolve } from '$app/paths';
+  import { page } from '$app/state';
   import Amount from '#lib/components/Amount.svelte';
   import PaymentBadge from '#lib/components/PaymentBadge.svelte';
   import SelectField from '#lib/components/SelectField.svelte';
   import SourceIcon from '#lib/components/SourceIcon.svelte';
+  import Toast from '#lib/components/Toast.svelte';
   import { PERIODS } from '#lib/dates.js';
   import { formatDate } from '#lib/money.js';
   import { PAYMENT_STATUS_LABELS, type PaymentStatus } from '#lib/types.js';
@@ -13,6 +15,7 @@
   let { data }: PageProps = $props();
 
   let filterForm = $state<HTMLFormElement>();
+  const deleted = $derived(page.url.searchParams.get('deleted') === '1');
 
   const filters = $derived(data.filters);
   const list = $derived(data.list);
@@ -89,6 +92,8 @@
 <svelte:head>
   <title>Entries · Ficka</title>
 </svelte:head>
+
+{#if deleted}<Toast message="Entry deleted" />{/if}
 
 <div class="flex flex-col gap-3">
   <header class="flex flex-wrap items-center justify-between gap-2">
