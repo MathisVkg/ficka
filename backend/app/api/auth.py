@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.api.deps import CurrentCompany, CurrentSession, CurrentUser, DbSession, protected_router
+from app.errors import ValidationFailed
 from app.models import AppUser
 from app.services import auth
 
@@ -123,8 +124,7 @@ def change_password(
             keep_session_id=auth_session.id,
         )
     except auth.WrongPasswordError as exc:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, detail="The current password is incorrect."
-        ) from exc
+        message = "The current password is incorrect."
+        raise ValidationFailed(message, fields={"current_password": message}) from exc
     logger.info("User %s changed their password", user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -5,21 +5,38 @@
  * `Authorization: Bearer`, forwards the client IP for the login rate limit, applies a
  * timeout, parses JSON and turns failures into a typed result instead of throwing.
  * Nothing else may call `fetch(API_URL…)`.
+ *
+ * API errors have one shape (see backend `app/errors.py`):
+ *   { "error": { "code": "validation_error", "message": "…", "fields": { "lines.0.net_cents": "…" } } }
  */
 import { API_URL } from '$app/env/private';
 import type { Cookies } from '@sveltejs/kit';
 import { SESSION_COOKIE } from './session.js';
 
-export type ApiResult<T> =
-  | { ok: true; status: number; data: T }
-  | {
-      ok: false;
-      /** HTTP status from the API, or 503 when the API couldn't be reached. */
-      status: number;
-      message: string;
-      /** True when the API didn't answer at all (down, timeout, network). */
-      unreachable: boolean;
-    };
+export type ApiErrorCode =
+  | 'validation_error'
+  | 'not_found'
+  | 'conflict'
+  | 'unauthorized'
+  | 'rate_limited'
+  | 'unreachable'
+  | (string & {});
+
+export interface ApiFailure {
+  ok: false;
+  /** HTTP status from the API, or 503 when the API couldn't be reached. */
+  status: number;
+  code: ApiErrorCode;
+  message: string;
+  /** Field errors keyed by dotted body path, e.g. `lines.0.vat_rate_bp`. */
+  fields: Record<string, string>;
+  /** Any extra data the API put in the error (e.g. usage counts on a conflict). */
+  extra: Record<string, unknown>;
+  /** True when the API didn't answer at all (down, timeout, network). */
+  unreachable: boolean;
+}
+
+export type ApiResult<T> = { ok: true; status: number; data: T } | ApiFailure;
 
 export interface ApiEvent {
   cookies: Cookies;
@@ -29,12 +46,14 @@ export interface ApiEvent {
 export interface ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
+  /** Query parameters; empty, null and undefined values are left out. */
+  query?: Record<string, string | number | boolean | null | undefined>;
   /** Overrides the session cookie; pass `null` to send no token (login). */
   token?: string | null;
   timeoutMs?: number;
 }
 
-const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 8000;
 
 function clientAddress(event: ApiEvent): string | undefined {
   try {
@@ -44,16 +63,41 @@ function clientAddress(event: ApiEvent): string | undefined {
   }
 }
 
-function errorMessage(payload: unknown, status: number): string {
-  if (payload && typeof payload === 'object' && 'detail' in payload) {
-    const detail = payload.detail;
-    if (typeof detail === 'string') return detail;
-    if (Array.isArray(detail) && detail.length > 0) {
-      const first = detail[0] as { msg?: unknown };
-      if (typeof first.msg === 'string') return first.msg;
-    }
+function failure(payload: unknown, status: number): ApiFailure {
+  const fallback = `The API answered with an error (${status}).`;
+  if (payload && typeof payload === 'object' && 'error' in payload) {
+    const error = (payload as { error: Record<string, unknown> }).error;
+    const { code, message, fields, ...extra } = error;
+    return {
+      ok: false,
+      status,
+      code: typeof code === 'string' ? code : 'error',
+      message: typeof message === 'string' ? message : fallback,
+      fields:
+        fields && typeof fields === 'object' ? (fields as Record<string, string>) : ({} as never),
+      extra,
+      unreachable: false
+    };
   }
-  return `The API answered with an error (${status}).`;
+  return {
+    ok: false,
+    status,
+    code: 'error',
+    message: fallback,
+    fields: {},
+    extra: {},
+    unreachable: false
+  };
+}
+
+function withQuery(path: string, query: ApiOptions['query']): string {
+  if (!query) return path;
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== '') params.set(key, String(value));
+  }
+  const search = params.toString();
+  return search ? `${path}?${search}` : path;
 }
 
 export async function api<T = unknown>(
@@ -72,24 +116,27 @@ export async function api<T = unknown>(
 
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, {
+    response = await fetch(`${API_URL}${withQuery(path, options.query)}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs)
     });
   } catch {
-    return { ok: false, status: 503, message: 'The API is unavailable.', unreachable: true };
+    return {
+      ok: false,
+      status: 503,
+      code: 'unreachable',
+      message: 'Ficka cannot reach its server. Try again shortly.',
+      fields: {},
+      extra: {},
+      unreachable: true
+    };
   }
 
   const payload: unknown = response.status === 204 ? null : await response.json().catch(() => null);
   if (response.ok) {
     return { ok: true, status: response.status, data: payload as T };
   }
-  return {
-    ok: false,
-    status: response.status,
-    message: errorMessage(payload, response.status),
-    unreachable: false
-  };
+  return failure(payload, response.status);
 }

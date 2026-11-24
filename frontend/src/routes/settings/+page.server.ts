@@ -37,13 +37,13 @@ export const actions: Actions = {
         clearSessionCookie(event.cookies, event.url);
         redirect(303, '/login?next=%2Fsettings');
       }
-      if (result.status === 400) return failPassword(400, { current: result.message });
-      if (result.status === 422) return failPassword(400, { new: result.message });
-      return failPassword(result.status, {
-        form: result.unreachable
-          ? 'Ficka cannot reach its server. Try again shortly.'
-          : result.message
-      });
+      if (result.code === 'validation_error') {
+        const { current_password, new_password } = result.fields;
+        if (current_password || new_password) {
+          return failPassword(400, { current: current_password, new: new_password });
+        }
+      }
+      return failPassword(result.status, { form: result.message });
     }
 
     return { password: { errors: {} as PasswordErrors, success: true } };

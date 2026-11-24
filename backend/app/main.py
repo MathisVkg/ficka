@@ -12,6 +12,7 @@ from app import __version__
 from app.api import api_router
 from app.config import get_settings
 from app.db import get_engine
+from app.errors import install_error_handlers
 from app.services import auth
 
 settings = get_settings()
@@ -40,4 +41,5 @@ app = FastAPI(
     redoc_url=None,
     openapi_url="/api/openapi.json" if settings.api_docs else None,
 )
+install_error_handlers(app)
 app.include_router(api_router)
