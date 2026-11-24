@@ -57,11 +57,24 @@ Configuration is read from environment variables (or `backend/.env`):
 | `LOG_LEVEL` | `INFO` | log level |
 | `API_URL` (frontend) | `http://localhost:8000` | internal URL SvelteKit uses to reach the API |
 
-## Docker
+## Docker (local build)
+
+`docker-compose.yml` builds the images from the source. No variables are needed; `FICKA_PORT` (default `3000`) and `ORIGIN` (default `http://localhost:3000`) can be set if needed.
 
 ```powershell
 docker compose up -d --build
+```
+
+Then create the company and its owner, either interactively (the password is asked twice, hidden):
+
+```powershell
 docker compose exec api python -m app.cli init
+```
+
+or in one line with options (the password then stays in your shell history):
+
+```powershell
+docker compose exec api python -m app.cli init --company-name "My company" --email "me@example.com" --display-name "Me" --password "a-long-password"
 ```
 
 Open <http://localhost:3000>. Only the web service is published; the API is reachable only inside the Compose network.
@@ -72,6 +85,40 @@ The optional local LLM (Ollama) is started only with the `ai` profile:
 ```powershell
 docker compose --profile ai up -d
 ```
+
+## Deploy with Portainer (Repository method)
+
+The server never builds anything. On every push to `main`, GitHub Actions builds the images and publishes them to the GitHub Container Registry as `ghcr.io/mathisvkg/ficka-api` and `ghcr.io/mathisvkg/ficka-web`. Portainer deploys [`deploy/portainer-compose.yml`](deploy/portainer-compose.yml), which only pulls those images.
+
+1. **Publish the images.** Push to `main`, then open the repository's **Actions** tab on GitHub and check that the **images** workflow succeeded. It can also be started by hand there (**Run workflow**).
+2. **First time only: make the images pullable.** On GitHub, open your profile → **Packages**, then for both `ficka-api` and `ficka-web`: **Package settings** → **Change visibility** → **Public** (simplest).
+   If they should stay private, add the registry in Portainer instead: **Registries** → **Add registry** → **Custom registry**, URL `ghcr.io`, username = your GitHub user, password = a *classic* personal access token with only the `read:packages` scope.
+3. **Create the stack.** Portainer → **Stacks** → **Add stack** → **Repository**:
+   - Repository URL: this repository
+   - Repository reference: `refs/heads/main`
+   - Compose path: `deploy/portainer-compose.yml`
+4. **Environment variables** (in the same screen, **Environment variables** → **Add an environment variable**):
+
+   | Name | Required | Value |
+   |---|---|---|
+   | `ORIGIN` | yes | the URL you open in the browser, for example `http://<server-ip>:3000` (no trailing slash) |
+   | `FICKA_PORT` | no | host port for the web app, default `3000` (keep it consistent with `ORIGIN`) |
+   | `FICKA_TAG` | no | image tag, default `latest`; set `sha-xxxxxxx` (from the Actions run or the package page) to pin a version |
+
+5. **Deploy, then initialize once.** Click **Deploy the stack**. When the `api` container is healthy, open it in Portainer (**Containers** → `api` → **Console**), keep the default user (or choose `ficka`, never `root`), connect with `/bin/sh`, and run:
+
+   ```sh
+   python -m app.cli init
+   ```
+
+   It asks for the company name, your email, display name and password. The one-line form with options shown in the Docker section also works there.
+   Then open the `ORIGIN` URL in your browser.
+6. **Update.** Push to `main` and wait for the **images** workflow to finish. In Portainer, open the stack and click **Pull and redeploy**, with **Re-pull image** enabled. The `ficka-data` volume keeps the data across redeploys.
+7. **Troubleshooting.**
+   - *Forms are rejected* (`Cross-site POST form submissions are forbidden`): `ORIGIN` doesn't exactly match the URL in the browser (scheme, host and port).
+   - *Image pull denied / not found*: the package is private and Portainer has no `ghcr.io` registry credential (step 2), or the workflow hasn't published that tag yet.
+   - *`init` says "Running as root"*: the console was opened as `root`; reconnect with the default user.
+   - *The web app says "API unavailable"*: check the `api` container logs in Portainer.
 
 ## Project structure
 
@@ -92,6 +139,10 @@ ficka/
 ├── frontend/             SvelteKit app (TypeScript, Tailwind CSS v4, bits-ui)
 │   ├── src/
 │   └── Dockerfile
+├── deploy/
+│   └── portainer-compose.yml   server stack: pulls prebuilt images from GHCR
+├── .github/workflows/
+│   └── images.yml        builds and publishes the images on every push to main
 ├── docs/                 decisions, data model, reference schema
-└── docker-compose.yml
+└── docker-compose.yml    local stack: builds the images from source
 ```

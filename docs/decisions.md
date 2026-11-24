@@ -82,7 +82,14 @@ The decisions settled during planning (November 2026). Change one only on purpos
 | Documents | lxml, factur-x, pdfplumber, OpenCV, Tesseract, PaddleOCR; Ollama optional |
 | Frontend | SvelteKit (TypeScript), Tailwind CSS v4, bits-ui, Apache ECharts |
 | Motion | Svelte transitions + Anime.js v4, respecting `prefers-reduced-motion` |
-| Deployment | Docker Compose: `app` + optional `ollama` |
+| Deployment | Docker Compose services `api` + `web` + optional `ollama`; images built by GitHub Actions and published to GHCR; Portainer deploys `deploy/portainer-compose.yml` with the Repository method; no build on the server |
+
+## Deployment
+
+- The server is managed through Portainer, reached through the Portainer agent, which can't run image builds (BuildKit fails with `http2: frame too large`). So **nothing is built on the server**.
+- GitHub Actions (`.github/workflows/images.yml`) builds `ficka-api` and `ficka-web` on every push to `main` and publishes them to GHCR, tagged `latest` and `sha-<short sha>`.
+- Portainer deploys `deploy/portainer-compose.yml` (Stacks → Repository), which only pulls the images. `docker-compose.yml` stays for local builds; the two files are kept aligned.
+- GHCR is used at deploy time only; the running app has no external dependency.
 
 ## Design
 
