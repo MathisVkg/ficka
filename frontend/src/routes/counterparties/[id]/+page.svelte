@@ -49,7 +49,7 @@
 
 {#if saved}<Toast message="Saved" onclose={dismissSaved} />{/if}
 
-<div class="flex max-w-[960px] flex-col gap-3">
+<div class="flex flex-col gap-3">
   <header class="flex flex-wrap items-start justify-between gap-2">
     <div>
       <a href={resolve('/counterparties')} class="text-sm text-muted hover:text-ink">
@@ -70,58 +70,64 @@
 
   {#if result?.deleteMessage}<Notice tone="error">{result.deleteMessage}</Notice>{/if}
 
-  <section
-    aria-label="Statistics"
-    class="grid grid-cols-2 gap-1.5 rounded-xl border border-border bg-surface p-2 md:grid-cols-4 md:p-3"
-  >
-    <div>
-      <p class="text-xs text-muted">Entries</p>
-      <p class="mt-0.5 text-lg font-semibold amount">{stats.entries_count}</p>
+  <!-- Form on the left, statistics on the right on wide screens. -->
+  <div class="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div class="min-w-0 lg:order-1">
+      {#key form}
+        <CounterpartyForm
+          {values}
+          categories={data.categories}
+          rates={data.rates}
+          errors={result?.errors ?? {}}
+          message={result?.message ?? null}
+          action="?/save"
+        />
+      {/key}
     </div>
-    <div>
-      <p class="text-xs text-muted">Income</p>
-      <p class="mt-0.5 text-lg font-semibold">
-        <Amount cents={stats.income_total_cents} direction="income" />
-      </p>
-    </div>
-    <div>
-      <p class="text-xs text-muted">Expenses</p>
-      <p class="mt-0.5 text-lg font-semibold">
-        <Amount cents={stats.expense_total_cents} direction="expense" />
-      </p>
-    </div>
-    <div>
-      <p class="text-xs text-muted">Open balance</p>
-      <p class="mt-0.5 text-lg font-semibold">
-        {#if stats.open_balance_cents === 0}<span class="text-muted">—</span>{:else}
-          <Amount
-            cents={Math.abs(stats.open_balance_cents)}
-            direction={stats.open_balance_cents > 0 ? 'income' : 'expense'}
-          />
-        {/if}
-      </p>
-    </div>
-    <p class="col-span-2 text-xs text-muted md:col-span-4">
-      Confirmed entries, amounts incl. VAT.
-      <a
-        href={resolve(`/entries?counterparty_id=${cp.id}`)}
-        class="font-medium text-accent hover:underline"
+    <div class="lg:sticky lg:top-4 lg:order-2">
+      <section
+        aria-label="Statistics"
+        class="grid grid-cols-2 gap-1.5 rounded-xl border border-border bg-surface p-2 md:grid-cols-4 md:p-3 lg:grid-cols-2"
       >
-        View entries
-      </a>
-    </p>
-  </section>
-
-  {#key form}
-    <CounterpartyForm
-      {values}
-      categories={data.categories}
-      rates={data.rates}
-      errors={result?.errors ?? {}}
-      message={result?.message ?? null}
-      action="?/save"
-    />
-  {/key}
+        <div>
+          <p class="text-xs text-muted">Entries</p>
+          <p class="mt-0.5 text-lg font-semibold amount">{stats.entries_count}</p>
+        </div>
+        <div>
+          <p class="text-xs text-muted">Income</p>
+          <p class="mt-0.5 text-lg font-semibold">
+            <Amount cents={stats.income_total_cents} direction="income" />
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-muted">Expenses</p>
+          <p class="mt-0.5 text-lg font-semibold">
+            <Amount cents={stats.expense_total_cents} direction="expense" />
+          </p>
+        </div>
+        <div>
+          <p class="text-xs text-muted">Open balance</p>
+          <p class="mt-0.5 text-lg font-semibold">
+            {#if stats.open_balance_cents === 0}<span class="text-muted">—</span>{:else}
+              <Amount
+                cents={Math.abs(stats.open_balance_cents)}
+                direction={stats.open_balance_cents > 0 ? 'income' : 'expense'}
+              />
+            {/if}
+          </p>
+        </div>
+        <p class="col-span-2 text-xs text-muted md:col-span-4 lg:col-span-2">
+          Confirmed entries, amounts incl. VAT.
+          <a
+            href={resolve(`/entries?counterparty_id=${cp.id}`)}
+            class="font-medium text-accent hover:underline"
+          >
+            View entries
+          </a>
+        </p>
+      </section>
+    </div>
+  </div>
 </div>
 
 <ConfirmDialog bind:open={deleteOpen} title="Delete {cp.name}?">

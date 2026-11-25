@@ -105,7 +105,8 @@
     <div class="mt-2"><Notice tone="error">{result.message}</Notice></div>
   {/if}
 
-  <div class="mt-3 flex flex-col gap-4">
+  <!-- Income and Expenses side by side on wide screens. -->
+  <div class="mt-3 grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
     {#each groups as group (group.direction)}
       <div>
         <h3 class="text-base font-semibold">{group.title}</h3>

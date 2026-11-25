@@ -1,19 +1,17 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import Button from '#lib/components/Button.svelte';
-  import CategoriesSection from '#lib/components/CategoriesSection.svelte';
   import TextField from '#lib/components/TextField.svelte';
   import { formString } from '#lib/forms.js';
   import type { PageProps } from './$types';
-  import type { CategoryResult, PasswordErrors } from './+page.server';
+  import type { PasswordErrors } from './+page.server';
 
   const MIN_PASSWORD_LENGTH = 8;
 
-  let { data, form }: PageProps = $props();
+  let { form }: PageProps = $props();
 
   type FormResult = {
     password?: { errors: PasswordErrors; success: boolean };
-    category?: CategoryResult;
   };
   const result = $derived((form ?? null) as FormResult | null);
 
@@ -25,13 +23,10 @@
 </script>
 
 <svelte:head>
-  <title>Settings · Ficka</title>
+  <title>Account · Settings · Ficka</title>
 </svelte:head>
 
-<div class="flex max-w-[760px] flex-col gap-4">
-  <h1 class="text-3xl font-semibold tracking-tight">Settings</h1>
-
-  <!-- Sections: Account, Categories. Later settings sections go below as further <section> blocks. -->
+<div class="flex flex-col gap-4">
   <section
     aria-labelledby="settings-account"
     class="rounded-xl border border-border bg-surface p-3 md:p-4"
@@ -42,7 +37,7 @@
     <form
       method="POST"
       action="?/password"
-      class="mt-3 flex flex-col gap-2"
+      class="mt-3 grid grid-cols-1 items-start gap-2 lg:grid-cols-3"
       use:enhance={({ formData, cancel }) => {
         const next = formString(formData, 'new_password');
         const confirm = formString(formData, 'confirm_password');
@@ -90,7 +85,7 @@
         error={errors.confirm}
       />
 
-      <div aria-live="polite" class="min-h-[20px]">
+      <div aria-live="polite" class="min-h-[20px] lg:col-span-3">
         {#if errors.form}
           <p class="text-sm text-expense">{errors.form}</p>
         {:else if success}
@@ -98,15 +93,9 @@
         {/if}
       </div>
 
-      <div>
+      <div class="lg:col-span-3">
         <Button disabled={submitting}>{submitting ? 'Saving…' : 'Change password'}</Button>
       </div>
     </form>
   </section>
-
-  <CategoriesSection
-    categories={data.categories}
-    rates={data.rates}
-    result={result?.category ?? null}
-  />
 </div>

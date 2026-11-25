@@ -20,7 +20,7 @@
   <title>New counterparty · Ficka</title>
 </svelte:head>
 
-<div class="flex max-w-[960px] flex-col gap-3">
+<div class="flex flex-col gap-3">
   <header>
     <a href={resolve('/counterparties')} class="text-sm text-muted hover:text-ink">
       ← Counterparties
