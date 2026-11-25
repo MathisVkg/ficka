@@ -1,8 +1,9 @@
-import { error } from '@sveltejs/kit';
+import { error, fail, redirect } from '@sveltejs/kit';
+import { formString } from '#lib/forms.js';
 import { isPeriod, periodRange, todayIso, type Period } from '#lib/dates.js';
 import { api } from '#lib/server/api.js';
 import type { Category, Counterparty, Direction, EntryList, PaymentStatus } from '#lib/types.js';
-import type { PageServerLoad } from './$types';
+import type { Actions, PageServerLoad } from './$types';
 
 const PAGE_SIZE = 50;
 
@@ -18,7 +19,7 @@ export const load: PageServerLoad = async (event) => {
   const direction: Direction | null =
     directionParam === 'income' || directionParam === 'expense' ? directionParam : null;
   const periodParam = params.get('period');
-  const period: Period = isPeriod(periodParam) ? periodParam : 'all';
+  const period: Period = isPeriod(periodParam) ? periodParam : 'this-month';
   const range = periodRange(period, todayIso(), { from: params.get('from'), to: params.get('to') });
   const statusParam = params.get('payment_status') as PaymentStatus | null;
   const paymentStatus = statusParam && PAYMENT_STATUSES.includes(statusParam) ? statusParam : null;
@@ -68,4 +69,18 @@ export const load: PageServerLoad = async (event) => {
     },
     pageSize: PAGE_SIZE
   };
+};
+
+export const actions: Actions = {
+  /** "Mark paid" in the list: one payment for the rest, today; back to the same filters. */
+  markPaid: async (event) => {
+    const id = formString(await event.request.formData(), 'id');
+    if (!/^\d+$/.test(id)) return fail(400, { message: 'Unknown entry.' });
+    const result = await api(event, `/api/entries/${id}/mark-paid`, { method: 'POST', body: {} });
+    if (!result.ok) return fail(result.status, { message: result.message });
+    const params = new URLSearchParams(event.url.search);
+    params.delete('/markPaid');
+    params.set('marked', '1');
+    redirect(303, `/entries?${params.toString()}`);
+  }
 };

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import { enhance } from '$app/forms';
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import Amount from '#lib/components/Amount.svelte';
@@ -8,7 +9,7 @@
   import SourceIcon from '#lib/components/SourceIcon.svelte';
   import Toast from '#lib/components/Toast.svelte';
   import { PERIODS } from '#lib/dates.js';
-  import { formatDate } from '#lib/money.js';
+  import { formatCents, formatDate } from '#lib/money.js';
   import { PAYMENT_STATUS_LABELS, type PaymentStatus } from '#lib/types.js';
   import type { PageProps } from './$types';
 
@@ -16,6 +17,12 @@
 
   let filterForm = $state<HTMLFormElement>();
   const deleted = $derived(page.url.searchParams.get('deleted') === '1');
+  const marked = $derived(page.url.searchParams.get('marked') === '1');
+  // Form actions keep the current filters: "?period=all&/markPaid".
+  const markPaidAction = $derived.by(() => {
+    const current = query({});
+    return current ? `${current}&/markPaid` : '?/markPaid';
+  });
 
   const filters = $derived(data.filters);
   const list = $derived(data.list);
@@ -25,7 +32,7 @@
   const hasFilters = $derived(
     Boolean(
       filters.direction ||
-      filters.period !== 'all' ||
+      filters.period !== 'this-month' ||
       filters.paymentStatus ||
       filters.categoryId ||
       filters.counterpartyId ||
@@ -60,7 +67,7 @@
     const parts: string[] = [];
     const current: Record<string, string | number | null> = {
       direction: filters.direction,
-      period: filters.period === 'all' ? null : filters.period,
+      period: filters.period === 'this-month' ? null : filters.period,
       from: filters.from,
       to: filters.to,
       payment_status: filters.paymentStatus,
@@ -94,6 +101,7 @@
 </svelte:head>
 
 {#if deleted}<Toast message="Entry deleted" />{/if}
+{#if marked}<Toast message="Marked as paid" />{/if}
 
 <div class="flex flex-col gap-3">
   <header class="flex flex-wrap items-center justify-between gap-2">
@@ -113,67 +121,69 @@
     class="flex flex-col gap-2 rounded-xl border border-border bg-surface p-2"
     data-sveltekit-keepfocus
   >
-    <nav aria-label="Direction" class="flex flex-wrap gap-0.5">
-      {#each tabs as tab (tab.label)}
-        {@const active = filters.direction === tab.value}
-        <a
-          href={resolve(
-            `/entries${query({ direction: tab.value, page: null, category_id: null })}`
-          )}
-          aria-current={active ? 'page' : undefined}
-          class={[
-            'inline-flex min-h-[44px] items-center rounded-md px-2 text-sm transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-accent',
-            active ? 'bg-nav font-medium text-ink' : 'text-muted hover:text-ink'
-          ]}
-        >
-          {tab.label}
-        </a>
-      {/each}
-    </nav>
-    {#if filters.direction}<input type="hidden" name="direction" value={filters.direction} />{/if}
-    {#if filters.counterpartyId}
-      <input type="hidden" name="counterparty_id" value={filters.counterpartyId} />
-    {/if}
-
-    <div class="grid grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
-      <SelectField
-        label="Period"
-        name="period"
-        items={periodItems}
-        bind:value={period}
-        onchange={(value) => value !== 'custom' && submitFilters()}
-      />
-      <SelectField
-        label="Payment"
-        name="payment_status"
-        items={statusItems}
-        value={filters.paymentStatus ?? 'any'}
-        onchange={submitFilters}
-      />
-      <SelectField
-        label="Category"
-        name="category_id"
-        items={categoryItems}
-        value={filters.categoryId ? String(filters.categoryId) : 'any'}
-        onchange={submitFilters}
-      />
-      <div class="flex flex-col gap-0.5">
-        <label for="entries-q" class="text-sm font-medium text-ink">Search</label>
-        <div class="flex gap-0.5">
-          <input
-            id="entries-q"
-            name="q"
-            type="search"
-            value={filters.q}
-            placeholder="Description, invoice no., counterparty"
-            class="min-h-[44px] w-full min-w-0 rounded-md border border-border bg-surface px-1.5 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
-          />
-          <button
-            type="submit"
-            class="min-h-[44px] rounded-md border border-border px-1.5 text-sm font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    <div class="flex flex-col gap-2 2xl:flex-row 2xl:items-end">
+      <nav aria-label="Direction" class="flex shrink-0 flex-wrap gap-0.5">
+        {#each tabs as tab (tab.label)}
+          {@const active = filters.direction === tab.value}
+          <a
+            href={resolve(
+              `/entries${query({ direction: tab.value, page: null, category_id: null })}`
+            )}
+            aria-current={active ? 'page' : undefined}
+            class={[
+              'inline-flex min-h-[44px] items-center rounded-md px-2 text-sm transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-accent',
+              active ? 'bg-nav font-medium text-ink' : 'text-muted hover:text-ink'
+            ]}
           >
-            Search
-          </button>
+            {tab.label}
+          </a>
+        {/each}
+      </nav>
+      {#if filters.direction}<input type="hidden" name="direction" value={filters.direction} />{/if}
+      {#if filters.counterpartyId}
+        <input type="hidden" name="counterparty_id" value={filters.counterpartyId} />
+      {/if}
+
+      <div class="grid min-w-0 flex-1 grid-cols-1 gap-1.5 sm:grid-cols-2 lg:grid-cols-4">
+        <SelectField
+          label="Period"
+          name="period"
+          items={periodItems}
+          bind:value={period}
+          onchange={(value) => value !== 'custom' && submitFilters()}
+        />
+        <SelectField
+          label="Payment"
+          name="payment_status"
+          items={statusItems}
+          value={filters.paymentStatus ?? 'any'}
+          onchange={submitFilters}
+        />
+        <SelectField
+          label="Category"
+          name="category_id"
+          items={categoryItems}
+          value={filters.categoryId ? String(filters.categoryId) : 'any'}
+          onchange={submitFilters}
+        />
+        <div class="flex flex-col gap-0.5">
+          <label for="entries-q" class="text-sm font-medium text-ink">Search</label>
+          <div class="flex gap-0.5">
+            <input
+              id="entries-q"
+              name="q"
+              type="search"
+              value={filters.q}
+              placeholder="Description, invoice no., counterparty"
+              class="min-h-[44px] w-full min-w-0 rounded-md border border-border bg-surface px-1.5 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
+            />
+            <button
+              type="submit"
+              class="min-h-[44px] rounded-md border border-border px-1.5 text-sm font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+            >
+              Search
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -322,7 +332,26 @@
                 {entry.description ?? entry.invoice_number ?? ''}
               </td>
               <td class="px-2 py-1.5 text-muted">{entry.category?.name ?? '—'}</td>
-              <td class="px-2 py-1.5"><PaymentBadge status={entry.payment_status} /></td>
+              <td class="px-2 py-1.5">
+                <span class="flex items-center gap-1">
+                  <PaymentBadge status={entry.payment_status} />
+                  {#if entry.payment_status !== 'paid'}
+                    <!-- Above the row link (z-10), so clicking it doesn't open the entry. -->
+                    <form method="POST" action={markPaidAction} use:enhance class="relative z-10">
+                      <input type="hidden" name="id" value={entry.id} />
+                      <button
+                        type="submit"
+                        class="inline-flex min-h-[32px] items-center rounded-md border border-border bg-surface px-1 text-xs font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-accent"
+                        aria-label="Mark {entry.counterparty?.name ??
+                          entry.description ??
+                          'this entry'} of {formatCents(entry.total_gross_cents)} as paid"
+                      >
+                        Mark paid
+                      </button>
+                    </form>
+                  {/if}
+                </span>
+              </td>
               <td class="px-2 py-1.5 text-right font-medium">
                 <Amount cents={entry.total_gross_cents} direction={entry.direction} />
               </td>
