@@ -1,9 +1,14 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { Dialog, DropdownMenu } from 'bits-ui';
   import { enhance } from '$app/forms';
   import Button from '#lib/components/Button.svelte';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import Notice from '#lib/components/Notice.svelte';
   import SelectField from '#lib/components/SelectField.svelte';
+  import TextField from '#lib/components/TextField.svelte';
+  import Card from '#lib/components/layout/Card.svelte';
+  import { buttonClass, controlClass } from '#lib/components/layout/styles.js';
   import { formatRate } from '#lib/money.js';
   import type { Category, Direction, VatRate } from '#lib/types.js';
 
@@ -28,6 +33,17 @@
   let deleteTarget = $state<Category | null>(null);
   let deleteOpen = $state(false);
   let reassignTo = $state('');
+  let addDirection = $state<Direction | null>(null);
+  let addOpen = $state(false);
+  let addRate = $state('none');
+
+  // One hidden form performs the menu's Move up / Move down.
+  let moveForm = $state<HTMLFormElement>();
+  let move = $state<{ id: number; direction: Direction; step: string }>({
+    id: 0,
+    direction: 'expense',
+    step: 'up'
+  });
 
   const rateItems = $derived([
     { value: 'none', label: 'No VAT' },
@@ -49,19 +65,27 @@
 
   const usageTotal = (c: Category) => c.usage.entries + c.usage.templates + c.usage.counterparties;
 
+  function plural(n: number, one: string, many: string) {
+    return `${n} ${n === 1 ? one : many}`;
+  }
+
   function usageText(c: Category): string {
     const parts: string[] = [];
-    if (c.usage.entries)
-      parts.push(`${c.usage.entries} ${c.usage.entries === 1 ? 'entry' : 'entries'}`);
-    if (c.usage.templates)
-      parts.push(
-        `${c.usage.templates} recurring ${c.usage.templates === 1 ? 'template' : 'templates'}`
-      );
-    if (c.usage.counterparties)
-      parts.push(
-        `${c.usage.counterparties} ${c.usage.counterparties === 1 ? 'counterparty' : 'counterparties'} (default)`
-      );
+    if (c.usage.entries) parts.push(plural(c.usage.entries, 'entry', 'entries'));
+    if (c.usage.templates) {
+      parts.push(plural(c.usage.templates, 'recurring template', 'recurring templates'));
+    }
+    if (c.usage.counterparties) {
+      parts.push(`${plural(c.usage.counterparties, 'counterparty', 'counterparties')} (default)`);
+    }
     return parts.join(', ');
+  }
+
+  /** Short usage for the compact row: "3 entries" or "Unused". */
+  function usageShort(c: Category): string {
+    if (usageTotal(c) === 0) return 'Unused';
+    if (c.usage.entries) return plural(c.usage.entries, 'entry', 'entries');
+    return 'In use';
   }
 
   const reassignItems = $derived(
@@ -78,199 +102,224 @@
     deleteOpen = true;
   }
 
-  // Stay in edit mode only while the server reports an error for that row.
+  async function moveCategory(category: Category, step: 'up' | 'down') {
+    move = { id: category.id, direction: category.direction, step };
+    await tick();
+    moveForm?.requestSubmit();
+  }
+
+  function openAdd(direction: Direction) {
+    addDirection = direction;
+    addRate = direction === 'income' && rates.length ? String(rates[0].rate_bp) : 'none';
+    addOpen = true;
+  }
+
+  // Edit mode ends when the server accepts the change.
   $effect(() => {
     if (result?.action === 'update' && Object.keys(result.errors).length === 0 && !result.message) {
       editingId = null;
     }
   });
 
+  const createFailed = $derived(
+    result?.action === 'create' && (Object.keys(result.errors).length > 0 || !!result.message)
+  );
+  const highlightId = $derived(
+    result?.action === 'create' && !createFailed ? (result.id ?? null) : null
+  );
+
   const rateValue = (bp: number | null) => (bp === null ? 'none' : String(bp));
-  const inputClass =
-    'min-h-[44px] w-full rounded-md border border-border bg-surface px-1.5 text-base focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent aria-invalid:border-expense';
-  const iconButton =
-    'inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-sm text-muted hover:bg-nav hover:text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-30';
+  const menuItemClass =
+    'flex h-[40px] cursor-pointer items-center rounded-md px-1.5 text-sm text-ink outline-none data-disabled:cursor-not-allowed data-disabled:opacity-40 data-highlighted:bg-nav';
 </script>
 
-<section
-  aria-labelledby="settings-categories"
-  class="rounded-xl border border-border bg-surface p-3 md:p-4"
+{#if result?.message && (result.action === 'move' || result.action === 'delete')}
+  <div class="mb-2"><Notice tone="error">{result.message}</Notice></div>
+{/if}
+
+<form
+  bind:this={moveForm}
+  method="POST"
+  action="?/moveCategory"
+  use:enhance
+  class="hidden"
+  aria-hidden="true"
 >
-  <h2 id="settings-categories" class="text-lg font-semibold">Categories</h2>
-  <p class="mt-0.5 text-sm text-muted">
-    Group your income and expenses. The default VAT rate is suggested on new lines.
-  </p>
+  <input type="hidden" name="id" value={move.id} />
+  <input type="hidden" name="direction" value={move.direction} />
+  <input type="hidden" name="step" value={move.step} />
+</form>
 
-  {#if result?.message && (result.action === 'move' || result.action === 'delete')}
-    <div class="mt-2"><Notice tone="error">{result.message}</Notice></div>
-  {/if}
+<!-- Income and Expenses side by side on wide screens. -->
+<div class="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
+  {#each groups as group (group.direction)}
+    <Card
+      title={group.title}
+      titleId="categories-{group.direction}"
+      description={group.direction === 'income'
+        ? 'The default VAT rate is suggested on new income.'
+        : 'The default VAT rate is suggested on new expenses.'}
+    >
+      {#snippet actions()}
+        <Button type="button" variant="secondary" onclick={() => openAdd(group.direction)}>
+          + Add category
+        </Button>
+      {/snippet}
 
-  <!-- Income and Expenses side by side on wide screens. -->
-  <div class="mt-3 grid grid-cols-1 items-start gap-4 xl:grid-cols-2">
-    {#each groups as group (group.direction)}
-      <div>
-        <h3 class="text-base font-semibold">{group.title}</h3>
-        <ul class="mt-1 divide-y divide-border rounded-lg border border-border">
-          {#each group.items as category, index (category.id)}
-            {@const rowErrors =
-              result?.action === 'update' && result.id === category.id ? result.errors : {}}
-            <li class="px-1.5 py-1">
-              {#if editingId === category.id}
-                <form
-                  method="POST"
-                  action="?/updateCategory"
-                  use:enhance={() =>
-                    async ({ update }) =>
-                      update({ reset: false })}
-                  class="grid grid-cols-1 items-start gap-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]"
-                >
-                  <input type="hidden" name="id" value={category.id} />
-                  <div class="flex flex-col gap-0.5">
-                    <label for="cat-name-{category.id}" class="text-xs font-medium text-muted">
-                      Name
-                    </label>
-                    <input
-                      id="cat-name-{category.id}"
-                      name="name"
-                      required
-                      maxlength="120"
-                      value={category.name}
-                      aria-invalid={rowErrors.name ? 'true' : undefined}
-                      class={inputClass}
-                    />
-                    {#if rowErrors.name}<p class="text-sm text-expense">{rowErrors.name}</p>{/if}
-                  </div>
-                  <SelectField
-                    id="cat-rate-{category.id}"
-                    label="Default VAT"
-                    name="default_vat_rate_bp"
-                    items={rateItems}
-                    value={rateValue(category.default_vat_rate_bp)}
-                    error={rowErrors.default_vat_rate_bp}
-                  />
-                  <div class="flex gap-0.5 sm:pt-[22px]">
-                    <Button>Save</Button>
-                    <Button type="button" variant="ghost" onclick={() => (editingId = null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-                {#if result?.action === 'update' && result.id === category.id && result.message}
-                  <p class="mt-1 text-sm text-expense">{result.message}</p>
+      <ul class="divide-y divide-border rounded-lg border border-border">
+        {#each group.items as category, index (category.id)}
+          {@const rowErrors =
+            result?.action === 'update' && result.id === category.id ? result.errors : {}}
+          <li class={['px-1.5', category.id === highlightId && 'row-highlight']}>
+            {#if editingId === category.id}
+              <form
+                method="POST"
+                action="?/updateCategory"
+                use:enhance={() =>
+                  async ({ update }) =>
+                    update({ reset: false })}
+                class="flex min-h-[48px] flex-wrap items-center gap-1 py-0.5"
+              >
+                <input type="hidden" name="id" value={category.id} />
+                <label for="cat-name-{category.id}" class="sr-only">Name</label>
+                <input
+                  id="cat-name-{category.id}"
+                  name="name"
+                  required
+                  maxlength="120"
+                  value={category.name}
+                  aria-invalid={rowErrors.name ? 'true' : undefined}
+                  class={[controlClass, 'min-w-[160px] flex-1']}
+                />
+                <SelectField
+                  id="cat-rate-{category.id}"
+                  label="Default VAT"
+                  hideLabel
+                  name="default_vat_rate_bp"
+                  items={rateItems}
+                  value={rateValue(category.default_vat_rate_bp)}
+                  class="w-[140px]"
+                />
+                <Button>Save</Button>
+                <Button type="button" variant="ghost" onclick={() => (editingId = null)}>
+                  Cancel
+                </Button>
+                {#if rowErrors.name || (result?.action === 'update' && result.id === category.id && result.message)}
+                  <p class="w-full text-sm text-expense">{rowErrors.name ?? result?.message}</p>
                 {/if}
-              {:else}
-                <div class="flex flex-wrap items-center justify-between gap-1">
-                  <div class="min-w-0">
-                    <p class="truncate font-medium">{category.name}</p>
-                    <p class="text-xs text-muted">
-                      {formatRate(category.default_vat_rate_bp)} ·
-                      {usageTotal(category) === 0 ? 'Not used' : usageText(category)}
-                    </p>
-                  </div>
-                  <div class="flex items-center">
-                    <form method="POST" action="?/moveCategory" use:enhance>
-                      <input type="hidden" name="id" value={category.id} />
-                      <input type="hidden" name="direction" value={group.direction} />
-                      <input type="hidden" name="step" value="up" />
-                      <button
-                        type="submit"
-                        class={iconButton}
+              </form>
+            {:else}
+              <div class="flex h-[48px] items-center gap-1.5">
+                <span class="min-w-0 flex-1 truncate font-medium">{category.name}</span>
+                <span class="shrink-0 rounded-full bg-nav px-1 py-0.5 text-xs text-muted amount">
+                  {formatRate(category.default_vat_rate_bp)}
+                </span>
+                <span class="hidden w-[96px] shrink-0 text-right text-xs text-muted sm:inline">
+                  {usageShort(category)}
+                </span>
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger
+                    aria-label="Actions for {category.name}"
+                    class="inline-flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-md text-muted hover:bg-nav hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    <span aria-hidden="true" class="text-lg leading-none">⋯</span>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      align="end"
+                      sideOffset={4}
+                      class="z-50 min-w-[180px] rounded-lg border border-border bg-surface p-0.5 shadow-[0_8px_24px_rgba(29,30,32,0.08)]"
+                    >
+                      <DropdownMenu.Item
+                        class={menuItemClass}
+                        onSelect={() => (editingId = category.id)}
+                      >
+                        Edit
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        class={menuItemClass}
                         disabled={index === 0}
-                        aria-label="Move {category.name} up"
+                        onSelect={() => void moveCategory(category, 'up')}
                       >
-                        ↑
-                      </button>
-                    </form>
-                    <form method="POST" action="?/moveCategory" use:enhance>
-                      <input type="hidden" name="id" value={category.id} />
-                      <input type="hidden" name="direction" value={group.direction} />
-                      <input type="hidden" name="step" value="down" />
-                      <button
-                        type="submit"
-                        class={iconButton}
+                        Move up
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        class={menuItemClass}
                         disabled={index === group.items.length - 1}
-                        aria-label="Move {category.name} down"
+                        onSelect={() => void moveCategory(category, 'down')}
                       >
-                        ↓
-                      </button>
-                    </form>
-                    <button
-                      type="button"
-                      class={[iconButton, 'px-1']}
-                      onclick={() => (editingId = category.id)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      class={[iconButton, 'px-1 hover:text-expense']}
-                      onclick={() => askDelete(category)}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
-              {/if}
-            </li>
-          {:else}
-            <li class="px-1.5 py-1.5 text-sm text-muted">No categories yet.</li>
-          {/each}
-        </ul>
+                        Move down
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Separator class="my-0.5 h-px bg-border" />
+                      <DropdownMenu.Item
+                        class={[menuItemClass, 'text-expense data-highlighted:bg-expense/10']}
+                        onSelect={() => askDelete(category)}
+                      >
+                        Delete
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              </div>
+            {/if}
+          </li>
+        {:else}
+          <li class="px-1.5 py-1.5 text-sm text-muted">No categories yet.</li>
+        {/each}
+      </ul>
+    </Card>
+  {/each}
+</div>
 
-        {#key result}
-          {@const createResult =
-            result?.action === 'create' && result.direction === group.direction ? result : null}
-          {@const failed =
-            createResult && (Object.keys(createResult.errors).length > 0 || createResult.message)}
-          <form
-            method="POST"
-            action="?/createCategory"
-            use:enhance={() =>
-              async ({ update }) =>
-                update({ reset: false })}
-            class="mt-1.5 grid grid-cols-1 items-start gap-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]"
-          >
-            <input type="hidden" name="direction" value={group.direction} />
-            <div class="flex flex-col gap-0.5">
-              <label for="new-cat-{group.direction}" class="text-xs font-medium text-muted">
-                New {group.direction === 'income' ? 'income' : 'expense'} category
-              </label>
-              <input
-                id="new-cat-{group.direction}"
-                name="name"
-                required
-                maxlength="120"
-                value={failed ? (createResult?.values?.name ?? '') : ''}
-                aria-invalid={failed && createResult?.errors.name ? 'true' : undefined}
-                class={inputClass}
-              />
-              {#if failed && (createResult?.errors.name || createResult?.message)}
-                <p class="text-sm text-expense">
-                  {createResult?.errors.name ?? createResult?.message}
-                </p>
-              {/if}
-            </div>
-            <SelectField
-              id="new-cat-rate-{group.direction}"
-              label="Default VAT"
-              name="default_vat_rate_bp"
-              items={rateItems}
-              value={failed
-                ? (createResult?.values?.default_vat_rate_bp ?? 'none')
-                : group.direction === 'income'
-                  ? String(rates[0]?.rate_bp ?? 'none')
-                  : 'none'}
-            />
-            <div class="sm:pt-[22px]">
-              <Button variant="ghost" class="border border-border">Add category</Button>
-            </div>
-          </form>
-        {/key}
-      </div>
-    {/each}
-  </div>
-</section>
+<!-- Add category -->
+<Dialog.Root bind:open={addOpen}>
+  <Dialog.Portal>
+    <Dialog.Overlay class="fixed inset-0 z-40 bg-ink/30" />
+    <Dialog.Content
+      class="fixed top-1/2 left-1/2 z-50 w-[calc(100%-32px)] max-w-[440px] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-surface p-3 shadow-[0_16px_48px_rgba(29,30,32,0.12)]"
+    >
+      <Dialog.Title class="text-lg font-semibold">
+        New {addDirection === 'income' ? 'income' : 'expense'} category
+      </Dialog.Title>
+      <form
+        method="POST"
+        action="?/createCategory"
+        class="mt-2 flex flex-col gap-2"
+        use:enhance={() =>
+          async ({ result: actionResult, update }) => {
+            await update({ reset: false });
+            if (actionResult.type === 'success') addOpen = false;
+          }}
+      >
+        <input type="hidden" name="direction" value={addDirection ?? 'expense'} />
+        <TextField
+          id="new-category-name"
+          label="Name"
+          name="name"
+          required
+          maxlength={120}
+          value={createFailed ? (result?.values?.name ?? '') : ''}
+          error={createFailed && result?.direction === addDirection
+            ? (result?.errors.name ?? result?.message)
+            : null}
+        />
+        <SelectField
+          id="new-category-rate"
+          label="Default VAT"
+          name="default_vat_rate_bp"
+          items={rateItems}
+          bind:value={addRate}
+        />
+        <div class="mt-1 flex justify-end gap-1">
+          <Dialog.Close class={buttonClass('ghost')}>Cancel</Dialog.Close>
+          <Button>Add</Button>
+        </div>
+      </form>
+    </Dialog.Content>
+  </Dialog.Portal>
+</Dialog.Root>
 
+<!-- Delete (and move entries elsewhere when the category is in use) -->
 {#if deleteTarget}
   {@const target = deleteTarget}
   <ConfirmDialog bind:open={deleteOpen} title="Delete “{target.name}”?">
@@ -302,13 +351,9 @@
       >
         <input type="hidden" name="id" value={target.id} />
         <input type="hidden" name="reassign_to" value={reassignTo} />
-        <button
-          type="submit"
-          disabled={usageTotal(target) > 0 && !reassignTo}
-          class="inline-flex min-h-[44px] items-center rounded-md bg-expense px-2.5 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-50"
-        >
+        <Button variant="danger-solid" disabled={usageTotal(target) > 0 && !reassignTo}>
           {usageTotal(target) > 0 ? 'Move and delete' : 'Delete'}
-        </button>
+        </Button>
       </form>
     {/snippet}
   </ConfirmDialog>

@@ -48,7 +48,7 @@ export const actions: Actions = {
       default_vat_rate_bp: formString(form, 'default_vat_rate_bp')
     };
     const dir = direction(form);
-    const result = await api(event, '/api/categories', {
+    const result = await api<Category>(event, '/api/categories', {
       method: 'POST',
       body: {
         direction: dir,
@@ -65,7 +65,14 @@ export const actions: Actions = {
         values
       });
     }
-    return { category: { action: 'create', direction: dir, errors: {} } satisfies CategoryResult };
+    return {
+      category: {
+        action: 'create',
+        direction: dir,
+        id: result.data.id,
+        errors: {}
+      } satisfies CategoryResult
+    };
   },
 
   updateCategory: async (event) => {
