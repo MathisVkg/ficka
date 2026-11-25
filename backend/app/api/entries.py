@@ -1,6 +1,7 @@
 """Entries and payments."""
 
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import Query, Response, status
 from pydantic import BaseModel, Field
@@ -42,14 +43,40 @@ class EntryIn(BaseModel):
     lines: list[LineIn]
 
     def to_input(self) -> service.EntryInput:
-        data = self.model_dump(exclude={"lines", "paid_on"})
+        data = self.model_dump(exclude={"lines", "paid_on", "payment"})
         return service.EntryInput(
             **data, lines=[service.LineInput(**line.model_dump()) for line in self.lines]
         )
 
 
-class EntryCreate(EntryIn):
+class PaymentModeIn(BaseModel):
+    """paid: one payment for the full amount; unpaid: none; keep: unchanged (PUT only)."""
+
+    mode: Literal["paid", "unpaid", "keep"]
     paid_on: date | None = None
+
+    def to_instruction(self) -> service.PaymentInstruction:
+        return service.PaymentInstruction(self.mode, self.paid_on)
+
+
+class EntryCreate(EntryIn):
+    # Older shortcut, kept for compatibility: a date means "paid in full on that date".
+    paid_on: date | None = None
+    payment: PaymentModeIn | None = None
+
+
+class EntryUpdate(EntryIn):
+    payment: PaymentModeIn | None = None
+
+
+class MarkPaidIn(BaseModel):
+    paid_on: date | None = None
+
+
+class SuggestionOut(BaseModel):
+    category_id: int | None
+    vat_rate_bp: int | None
+    matched_on: Literal["counterparty", "description"] | None
 
 
 class PaymentIn(BaseModel):
@@ -266,6 +293,31 @@ def list_entries(
     )
 
 
+# Declared before /entries/{entry_id}, so "suggestion" is never read as an id.
+@router.get("/entries/suggestion", response_model=SuggestionOut)
+def entry_suggestion(
+    session: DbSession,
+    company: CurrentCompany,
+    direction: Direction,
+    counterparty_id: int | None = None,
+    description: str | None = Query(default=None, max_length=TEXT),
+) -> SuggestionOut:
+    """Category and VAT rate from the most recent similar confirmed entry (or nulls)."""
+    assert company.id is not None
+    suggestion = service.suggest(
+        session,
+        company.id,
+        direction=direction,
+        counterparty_id=counterparty_id,
+        description=description,
+    )
+    return SuggestionOut(
+        category_id=suggestion.category_id,
+        vat_rate_bp=suggestion.vat_rate_bp,
+        matched_on=suggestion.matched_on,  # type: ignore[arg-type]
+    )
+
+
 @router.get("/entries/{entry_id}", response_model=EntryOut)
 def get_entry(entry_id: int, session: DbSession, company: CurrentCompany, today: Today):
     assert company.id is not None
@@ -275,18 +327,46 @@ def get_entry(entry_id: int, session: DbSession, company: CurrentCompany, today:
 @router.post("/entries", response_model=EntryOut, status_code=status.HTTP_201_CREATED)
 def create_entry(body: EntryCreate, session: DbSession, company: CurrentCompany, today: Today):
     assert company.id is not None
-    entry = service.create_entry(session, company, body.to_input(), paid_on=body.paid_on)
+    entry = service.create_entry(
+        session,
+        company,
+        body.to_input(),
+        paid_on=body.paid_on,
+        payment=body.payment.to_instruction() if body.payment else None,
+    )
     assert entry.id is not None
     return entry_out(session, company.id, entry.id, today, service.warnings_for(session, entry))
 
 
 @router.put("/entries/{entry_id}", response_model=EntryOut)
 def update_entry(
-    entry_id: int, body: EntryIn, session: DbSession, company: CurrentCompany, today: Today
+    entry_id: int, body: EntryUpdate, session: DbSession, company: CurrentCompany, today: Today
 ):
+    """Replace the entry; `payment` (default keep) decides what happens to its payments."""
     assert company.id is not None
-    entry = service.update_entry(session, company, entry_id, body.to_input())
+    entry = service.update_entry(
+        session,
+        company,
+        entry_id,
+        body.to_input(),
+        payment=body.payment.to_instruction() if body.payment else None,
+    )
     return entry_out(session, company.id, entry_id, today, service.warnings_for(session, entry))
+
+
+@router.post("/entries/{entry_id}/mark-paid", response_model=EntryOut)
+def mark_paid(
+    entry_id: int,
+    session: DbSession,
+    company: CurrentCompany,
+    today: Today,
+    body: MarkPaidIn | None = None,
+):
+    """One payment for the remaining amount, on `paid_on` (default today); 409 if none remains."""
+    assert company.id is not None
+    paid_on = body.paid_on if body and body.paid_on else today
+    service.mark_paid(session, company.id, entry_id, paid_on)
+    return entry_out(session, company.id, entry_id, today)
 
 
 @router.post("/entries/{entry_id}/confirm", response_model=EntryOut)

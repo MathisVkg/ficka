@@ -305,11 +305,79 @@ def warnings_for(session: Session, entry: Entry) -> list[EntryWarning]:
 # --- Writing -------------------------------------------------------------------------------
 
 
+@dataclass(frozen=True)
+class PaymentInstruction:
+    """What to do with an entry's payments when it is saved.
+
+    - paid:   replace every payment with one payment for the full gross (on `paid_on`)
+    - unpaid: delete every payment
+    - keep:   leave the payments alone (update only)
+    """
+
+    mode: str  # paid, unpaid or keep
+    paid_on: date | None = None
+
+    @classmethod
+    def paid(cls, paid_on: date) -> "PaymentInstruction":
+        return cls("paid", paid_on)
+
+    @classmethod
+    def unpaid(cls) -> "PaymentInstruction":
+        return cls("unpaid")
+
+    @classmethod
+    def keep(cls) -> "PaymentInstruction":
+        return cls("keep")
+
+
+def _check_instruction(instruction: PaymentInstruction, *, allow_keep: bool) -> None:
+    if instruction.mode not in {"paid", "unpaid", "keep"} or (
+        instruction.mode == "keep" and not allow_keep
+    ):
+        allowed = "paid, unpaid or keep" if allow_keep else "paid or unpaid"
+        raise ValidationFailed(
+            f"The payment mode must be {allowed}.", fields={"payment.mode": f"Use {allowed}."}
+        )
+    if instruction.mode == "paid" and instruction.paid_on is None:
+        raise ValidationFailed(
+            "Enter the payment date.", fields={"payment.paid_on": "Enter the payment date."}
+        )
+
+
+def _apply_payment_instruction(
+    session: Session, entry_id: int, gross_cents: int, instruction: PaymentInstruction
+) -> None:
+    if instruction.mode == "keep":
+        return
+    session.exec(delete(Payment).where(col(Payment.entry_id) == entry_id))
+    if instruction.mode == "paid" and gross_cents > 0:
+        assert instruction.paid_on is not None
+        session.add(
+            Payment(
+                entry_id=entry_id,
+                paid_on=instruction.paid_on,
+                amount_cents=gross_cents,
+                source=PaymentSource.MANUAL,
+            )
+        )
+
+
 def create_entry(
-    session: Session, company: Company, data: EntryInput, paid_on: date | None = None
+    session: Session,
+    company: Company,
+    data: EntryInput,
+    paid_on: date | None = None,
+    payment: PaymentInstruction | None = None,
 ) -> Entry:
-    """A manual, confirmed entry; `paid_on` also records one payment for the full amount."""
+    """A manual, confirmed entry.
+
+    `payment` decides its payments (paid or unpaid). Without it, the older `paid_on`
+    shortcut applies: a date records one payment for the full amount, no date means unpaid.
+    """
     assert company.id is not None
+    if payment is None:
+        payment = PaymentInstruction.paid(paid_on) if paid_on else PaymentInstruction.unpaid()
+    _check_instruction(payment, allow_keep=False)
     prepared = _prepare(session, company, data)
     now = utc_now()
     entry = Entry(
@@ -327,27 +395,30 @@ def create_entry(
     session.flush()
     assert entry.id is not None
     _write_lines(session, entry.id, prepared)
-    if paid_on is not None and prepared.gross > 0:
-        session.add(
-            Payment(
-                entry_id=entry.id,
-                paid_on=paid_on,
-                amount_cents=prepared.gross,
-                source=PaymentSource.MANUAL,
-            )
-        )
+    _apply_payment_instruction(session, entry.id, prepared.gross, payment)
     session.commit()
     session.refresh(entry)
     return entry
 
 
-def update_entry(session: Session, company: Company, entry_id: int, data: EntryInput) -> Entry:
-    """Replace the header and the lines. The source and status don't change."""
+def update_entry(
+    session: Session,
+    company: Company,
+    entry_id: int,
+    data: EntryInput,
+    payment: PaymentInstruction | None = None,
+) -> Entry:
+    """Replace the header and the lines, and apply `payment` (default: keep), in one go.
+
+    The source and status don't change.
+    """
     assert company.id is not None
+    payment = payment or PaymentInstruction.keep()
+    _check_instruction(payment, allow_keep=True)
     entry = get_entry(session, company.id, entry_id)
     prepared = _prepare(session, company, data)
     paid = paid_cents_of(session, entry_id)
-    if prepared.gross < paid:
+    if payment.mode == "keep" and prepared.gross < paid:
         raise Conflict(
             f"The new total ({format_cents(prepared.gross)}) is less than what has already "
             f"been paid ({format_cents(paid)}). Remove a payment first.",
@@ -358,9 +429,74 @@ def update_entry(session: Session, company: Company, entry_id: int, data: EntryI
     session.add(entry)
     session.exec(delete(EntryLine).where(col(EntryLine.entry_id) == entry_id))
     _write_lines(session, entry_id, prepared)
+    _apply_payment_instruction(session, entry_id, prepared.gross, payment)
     session.commit()
     session.refresh(entry)
     return entry
+
+
+def mark_paid(session: Session, company_id: int, entry_id: int, paid_on: date) -> Payment:
+    """Record one payment for whatever remains to be paid; 409 when nothing remains."""
+    entry = get_entry(session, company_id, entry_id)
+    remaining = entry.total_gross_cents - paid_cents_of(session, entry_id)
+    if remaining <= 0:
+        raise Conflict("This entry is already fully paid.")
+    payment = Payment(
+        entry_id=entry_id, paid_on=paid_on, amount_cents=remaining, source=PaymentSource.MANUAL
+    )
+    session.add(payment)
+    session.commit()
+    session.refresh(payment)
+    return payment
+
+
+@dataclass(frozen=True)
+class Suggestion:
+    category_id: int | None = None
+    vat_rate_bp: int | None = None
+    matched_on: str | None = None  # counterparty, description or None
+
+
+def suggest(
+    session: Session,
+    company_id: int,
+    *,
+    direction: Direction,
+    counterparty_id: int | None = None,
+    description: str | None = None,
+) -> Suggestion:
+    """Category and VAT rate of the most recent confirmed entry that looks alike.
+
+    Same counterparty and direction first, then same description (case-insensitive,
+    trimmed) and direction. The rate is the one of that entry's first line.
+    """
+    base = (
+        select(Entry)
+        .where(
+            Entry.company_id == company_id,
+            Entry.direction == direction,
+            Entry.status == EntryStatus.CONFIRMED,
+        )
+        .order_by(col(Entry.invoice_date).desc(), col(Entry.id).desc())
+    )
+    candidates: list[tuple[str, object]] = []
+    if counterparty_id is not None:
+        candidates.append(("counterparty", Entry.counterparty_id == counterparty_id))
+    text = (description or "").strip().lower()
+    if text:
+        candidates.append(("description", func.lower(func.trim(Entry.description)) == text))
+    for matched_on, condition in candidates:
+        entry = session.exec(base.where(condition)).first()
+        if entry is None:
+            continue
+        assert entry.id is not None
+        rate = session.exec(
+            select(EntryLine.vat_rate_bp)
+            .where(EntryLine.entry_id == entry.id)
+            .order_by(col(EntryLine.position), col(EntryLine.id))
+        ).first()
+        return Suggestion(entry.category_id, rate, matched_on)
+    return Suggestion()
 
 
 def confirm_entry(session: Session, company_id: int, entry_id: int) -> Entry:
