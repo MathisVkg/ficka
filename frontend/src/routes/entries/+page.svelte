@@ -341,7 +341,7 @@
                       <input type="hidden" name="id" value={entry.id} />
                       <button
                         type="submit"
-                        class="inline-flex min-h-[32px] items-center rounded-md border border-border bg-surface px-1 text-xs font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-accent"
+                        class="inline-flex min-h-[44px] items-center rounded-md border border-border bg-surface px-1 text-xs font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-accent"
                         aria-label="Mark {entry.counterparty?.name ??
                           entry.description ??
                           'this entry'} of {formatCents(entry.total_gross_cents)} as paid"
