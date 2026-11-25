@@ -166,7 +166,19 @@ export interface EntryPayload {
     vat_cents?: number;
     vat_manual: boolean;
   }[];
+  /** Older shortcut (create only); the form sends `payment` instead. */
   paid_on?: string | null;
+  payment?: PaymentInstruction;
+}
+
+/** What to do with an entry's payments on save (see backend PaymentInstruction). */
+export type PaymentInstruction =
+  { mode: 'paid'; paid_on: string } | { mode: 'unpaid' } | { mode: 'keep' };
+
+export interface Suggestion {
+  category_id: number | null;
+  vat_rate_bp: number | null;
+  matched_on: 'counterparty' | 'description' | null;
 }
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {

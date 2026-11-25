@@ -4,7 +4,7 @@ import { isIsoDate } from '#lib/dates.js';
 import { parseAmount } from '#lib/money.js';
 import { api } from '#lib/server/api.js';
 import { readEntryPayload } from '#lib/server/entry-form.js';
-import type { Category, CompanySettings, Entry, VatRate } from '#lib/types.js';
+import type { Category, Entry, VatRate } from '#lib/types.js';
 import type { Actions, PageServerLoad } from './$types';
 
 function entryId(raw: string): number {
@@ -16,16 +16,14 @@ export const load: PageServerLoad = async (event) => {
   const id = entryId(event.params.id);
   const entry = await api<Entry>(event, `/api/entries/${id}`);
   if (!entry.ok) error(entry.unreachable ? 503 : entry.status, entry.message);
-  const [categories, rates, settings] = await Promise.all([
+  const [categories, rates] = await Promise.all([
     api<Category[]>(event, '/api/categories'),
-    api<VatRate[]>(event, '/api/vat-rates', { query: { on: entry.data.invoice_date } }),
-    api<CompanySettings>(event, '/api/company/settings')
+    api<VatRate[]>(event, '/api/vat-rates', { query: { on: entry.data.invoice_date } })
   ]);
   return {
     entry: entry.data,
     categories: categories.ok ? categories.data : [],
-    rates: rates.ok ? rates.data : [],
-    amountsIncludeVatDefault: settings.ok ? settings.data.amounts_include_vat_default : false
+    rates: rates.ok ? rates.data : []
   };
 };
 
@@ -37,7 +35,7 @@ export const actions: Actions = {
       return fail(400, { errors: {}, message: 'The form couldn’t be read. Reload the page.' });
     }
     const body = { ...payload };
-    delete body.paid_on; // payments are recorded separately on an existing entry
+    delete body.paid_on; // create-only shortcut; `payment` decides on update
     const result = await api<Entry>(event, `/api/entries/${id}`, { method: 'PUT', body });
     if (!result.ok) {
       return fail(result.status, {
@@ -46,6 +44,16 @@ export const actions: Actions = {
       });
     }
     redirect(303, `/entries/${id}?saved=1`);
+  },
+
+  markPaid: async (event) => {
+    const id = entryId(event.params.id);
+    const result = await api<Entry>(event, `/api/entries/${id}/mark-paid`, {
+      method: 'POST',
+      body: {}
+    });
+    if (!result.ok) return fail(result.status, { action: 'markPaid', message: result.message });
+    redirect(303, `/entries/${id}?marked=1`);
   },
 
   confirm: async (event) => {

@@ -1,6 +1,6 @@
 /** Server side of the entry form: read the JSON `payload` field and check its shape. */
 import { isIsoDate } from '#lib/dates.js';
-import type { EntryPayload } from '#lib/types.js';
+import type { EntryPayload, PaymentInstruction } from '#lib/types.js';
 
 function text(value: unknown, max = 2000): string | null {
   return typeof value === 'string' && value.trim() ? value.slice(0, max) : null;
@@ -12,6 +12,17 @@ function id(value: unknown): number | null {
 
 function cents(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+function payment(value: unknown): PaymentInstruction | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const p = value as Record<string, unknown>;
+  if (p.mode === 'paid' && typeof p.paid_on === 'string' && isIsoDate(p.paid_on)) {
+    return { mode: 'paid', paid_on: p.paid_on };
+  }
+  if (p.mode === 'paid') return { mode: 'paid', paid_on: '' }; // the API reports the missing date
+  if (p.mode === 'unpaid' || p.mode === 'keep') return { mode: p.mode };
+  return undefined;
 }
 
 /** The payload, or null when it isn't the shape the form sends (tampered or broken). */
@@ -43,6 +54,7 @@ export function readEntryPayload(raw: FormDataEntryValue | null): EntryPayload |
     paid_on: isIsoDate(typeof d.paid_on === 'string' ? d.paid_on : null)
       ? (d.paid_on as string)
       : null,
+    payment: payment(d.payment),
     lines: d.lines.slice(0, 200).map((line: unknown) => {
       const l = (line ?? {}) as Record<string, unknown>;
       return {

@@ -1,27 +1,38 @@
 import { error, fail, redirect } from '@sveltejs/kit';
-import { todayIso } from '#lib/dates.js';
+import { isIsoDate, todayIso } from '#lib/dates.js';
+import { formString } from '#lib/forms.js';
 import { api } from '#lib/server/api.js';
 import { readEntryPayload } from '#lib/server/entry-form.js';
-import type { Category, CompanySettings, Entry, VatRate } from '#lib/types.js';
+import type { Category, Direction, Entry, VatRate } from '#lib/types.js';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-  const [categories, rates, settings] = await Promise.all([
+  const params = event.url.searchParams;
+  const directionParam = params.get('direction');
+  const direction: Direction | null =
+    directionParam === 'income' || directionParam === 'expense' ? directionParam : null;
+  const dateParam = params.get('date');
+  const date = isIsoDate(dateParam) ? dateParam : null;
+
+  const [categories, rates] = await Promise.all([
     api<Category[]>(event, '/api/categories'),
-    api<VatRate[]>(event, '/api/vat-rates', { query: { on: todayIso() } }),
-    api<CompanySettings>(event, '/api/company/settings')
+    api<VatRate[]>(event, '/api/vat-rates', { query: { on: date ?? todayIso() } })
   ]);
   if (!categories.ok) error(categories.unreachable ? 503 : categories.status, categories.message);
   return {
     categories: categories.data,
     rates: rates.ok ? rates.data : [],
-    amountsIncludeVatDefault: settings.ok ? settings.data.amounts_include_vat_default : false
+    initialDirection: direction,
+    initialDate: date,
+    // Changes on every "Save and add another", so the page re-mounts an empty form.
+    formKey: `${event.url.search}`
   };
 };
 
 export const actions: Actions = {
   default: async (event) => {
-    const payload = readEntryPayload((await event.request.formData()).get('payload'));
+    const form = await event.request.formData();
+    const payload = readEntryPayload(form.get('payload'));
     if (!payload) {
       return fail(400, { errors: {}, message: 'The form couldn’t be read. Reload the page.' });
     }
@@ -31,6 +42,10 @@ export const actions: Actions = {
         errors: result.fields,
         message: result.code === 'validation_error' ? null : result.message
       });
+    }
+    if (formString(form, 'then') === 'another') {
+      const query = `direction=${payload.direction}&date=${payload.invoice_date}&saved=${result.data.id}`;
+      redirect(303, `/entries/new?${query}`);
     }
     redirect(303, `/entries/${result.data.id}?saved=1`);
   }
