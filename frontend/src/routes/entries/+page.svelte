@@ -179,7 +179,10 @@
             <input type="hidden" name="counterparty_id" value={filters.counterpartyId} />
           {/if}
 
-          <FormGrid columns={4} class="min-w-0 flex-1">
+          <!-- Period, Payment, Category and Search: one row from 1280px (2 x 2 below). -->
+          <div
+            class="grid min-w-0 flex-1 grid-cols-1 items-start gap-2 sm:grid-cols-2 xl:grid-cols-4"
+          >
             <SelectField
               label="Period"
               name="period"
@@ -214,7 +217,7 @@
                 <button type="submit" class={buttonClass('secondary')}>Search</button>
               </div>
             </Field>
-          </FormGrid>
+          </div>
         </div>
 
         {#if period === 'custom'}
