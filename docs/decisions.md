@@ -24,6 +24,9 @@ The decisions settled during planning (November 2026). Change one only on purpos
 - **Categories:** a default set at install. All are editable in Settings, and the user can create custom ones. Deleting a category that is still in use requires reassigning its entries first.
 - All entries can be edited or deleted.
 - **Currency:** EUR only in v1. The field exists.
+- **Simple entry by default:** one amount incl. VAT, Paid ticked by default (the payment is created automatically, on the entry date), details on demand ("More details": paid-on date, due date, invoice number, structured reference, document location, several lines, partial payments). Lines and payments remain the foundation: an entry that can't be shown simply opens with the details expanded, so nothing is hidden or lost.
+- **Payment wording** in the interface: Paid, **Expected** (unpaid, not yet due), **Late** (overdue), Partly paid. The API values stay `paid`, `unpaid`, `overdue`, `partial`.
+- **Saving an entry decides its payments** with `payment.mode`: `paid` (one payment for the full amount), `unpaid` (none) or `keep` (unchanged; the default on update). "Mark paid" records one payment for whatever remains.
 - **Money arithmetic uses integers only** (cents, basis points), in Python and TypeScript. The frontend repeats the VAT calculation for the live preview (`#lib/money.ts`); the server's result is authoritative, and both run the same test vectors.
 - **Company scoping:** every service function takes the company id; a resource of another company answers 404, as if it didn't exist.
 - **API errors** have one format: `{"error": {"code", "message", "fields"}}`, with codes `validation_error` (422), `not_found` (404), `conflict` (409), `unauthorized` (401), `rate_limited` (429). `fields` uses dotted paths matching the request body (`lines.0.vat_rate_bp`).

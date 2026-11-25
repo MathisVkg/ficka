@@ -143,6 +143,14 @@ Ficka has a single account, created by `python -m app.cli init` (there's no regi
 
 After 5 wrong passwords for the same email from the same address, sign-in is blocked for 15 minutes ("Too many attempts").
 
+## Recording an entry
+
+**Entries** → **New entry**. Choose Expense or Income, then type the date, the amount **including VAT** and the VAT rate; the VAT and the amount excluding VAT are worked out as you type. Category, counterparty and description are optional, and Ficka suggests the category and rate you used last time for the same counterparty or description.
+
+**Paid** is ticked by default: the payment is recorded on the entry's date. Untick it for something you still expect to pay or receive, and give the date you expect it on. Later, **Mark paid** (in the list or on the entry) records the payment.
+
+**More details** holds the rest: another payment date, invoice number, structured reference, where the document is kept, and **Split into several lines** for an invoice with several VAT rates. **Save and add another** keeps the type and the date, for a series of receipts.
+
 ## Forgot password
 
 There's no email reset: the password is reset from the command line, in the `api` container. This also signs out every session of that account.
