@@ -170,10 +170,10 @@ export interface EntryPayload {
 }
 
 export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
-  unpaid: 'Unpaid',
+  unpaid: 'Expected',
   partial: 'Partly paid',
   paid: 'Paid',
-  overdue: 'Overdue'
+  overdue: 'Late'
 };
 
 export const ROLE_LABELS: Record<CounterpartyRole, string> = {
