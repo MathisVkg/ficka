@@ -1,6 +1,8 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import CounterpartyForm from '#lib/components/CounterpartyForm.svelte';
+  import Page from '#lib/components/layout/Page.svelte';
+  import PageHeader from '#lib/components/layout/PageHeader.svelte';
   import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
@@ -20,13 +22,11 @@
   <title>New counterparty · Ficka</title>
 </svelte:head>
 
-<div class="flex flex-col gap-3">
-  <header>
-    <a href={resolve('/counterparties')} class="text-sm text-muted hover:text-ink">
-      ← Counterparties
-    </a>
-    <h1 class="mt-0.5 text-3xl font-semibold tracking-tight">New counterparty</h1>
-  </header>
+<Page>
+  <PageHeader
+    title="New counterparty"
+    back={{ href: resolve('/counterparties'), label: 'Counterparties' }}
+  />
   {#key form}
     <CounterpartyForm
       values={form?.values ?? empty}
@@ -37,4 +37,4 @@
       submitLabel="Create"
     />
   {/key}
-</div>
+</Page>

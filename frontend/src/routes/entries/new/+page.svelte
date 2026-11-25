@@ -3,11 +3,16 @@
   import { page } from '$app/state';
   import Toast from '#lib/components/Toast.svelte';
   import EntryForm from '#lib/components/entry/EntryForm.svelte';
+  import Page from '#lib/components/layout/Page.svelte';
+  import PageHeader from '#lib/components/layout/PageHeader.svelte';
+  import type { ResolvedPathname } from '$app/types';
   import type { PageProps } from './$types';
 
   let { data, form }: PageProps = $props();
 
   const savedId = $derived(page.url.searchParams.get('saved'));
+  // `from` is validated on the server (same-site relative path, /entries otherwise).
+  const from = $derived(data.from as ResolvedPathname);
 </script>
 
 <svelte:head>
@@ -15,14 +20,16 @@
 </svelte:head>
 
 {#if savedId}
-  {#key savedId}<Toast message="Saved. Ready for the next one." />{/key}
+  {#key savedId}
+    <Toast
+      message="Entry saved. Ready for the next one."
+      link={{ href: resolve('/entries/[id]', { id: savedId }), label: 'View entry' }}
+    />
+  {/key}
 {/if}
 
-<div class="flex flex-col gap-3">
-  <header>
-    <a href={resolve('/entries')} class="text-sm text-muted hover:text-ink">← Entries</a>
-    <h1 class="mt-0.5 text-3xl font-semibold tracking-tight">New entry</h1>
-  </header>
+<Page>
+  <PageHeader title="New entry" back={{ href: from, label: 'Entries' }} />
 
   {#key data.formKey}
     <EntryForm
@@ -32,6 +39,7 @@
       initialDate={data.initialDate}
       serverErrors={form?.errors ?? {}}
       serverMessage={form?.message ?? null}
+      cancelHref={from}
     />
   {/key}
-</div>
+</Page>

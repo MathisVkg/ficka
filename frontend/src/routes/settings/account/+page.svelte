@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import Button from '#lib/components/Button.svelte';
   import TextField from '#lib/components/TextField.svelte';
+  import Card from '#lib/components/layout/Card.svelte';
   import { formString } from '#lib/forms.js';
   import type { PageProps } from './$types';
   import type { PasswordErrors } from './+page.server';
@@ -27,17 +28,15 @@
 </svelte:head>
 
 <div class="flex flex-col gap-4">
-  <section
-    aria-labelledby="settings-account"
-    class="rounded-xl border border-border bg-surface p-3 md:p-4"
+  <Card
+    title="Account"
+    titleId="settings-account"
+    description="Change the password you use to sign in."
   >
-    <h2 id="settings-account" class="text-lg font-semibold">Account</h2>
-    <p class="mt-0.5 text-sm text-muted">Change the password you use to sign in.</p>
-
     <form
       method="POST"
       action="?/password"
-      class="mt-3 grid grid-cols-1 items-start gap-2 lg:grid-cols-3"
+      class="grid grid-cols-1 items-start gap-2 lg:grid-cols-3"
       use:enhance={({ formData, cancel }) => {
         const next = formString(formData, 'new_password');
         const confirm = formString(formData, 'confirm_password');
@@ -97,5 +96,5 @@
         <Button disabled={submitting}>{submitting ? 'Saving…' : 'Change password'}</Button>
       </div>
     </form>
-  </section>
+  </Card>
 </div>

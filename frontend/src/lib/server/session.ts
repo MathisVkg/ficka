@@ -1,4 +1,5 @@
 import type { Cookies } from '@sveltejs/kit';
+import { safeReturn } from '#lib/return-to.js';
 
 export const SESSION_COOKIE = 'ficka_session';
 
@@ -66,20 +67,7 @@ export function clearSessionCookie(cookies: Cookies, url: URL) {
   cookies.delete(SESSION_COOKIE, cookieOptions(url));
 }
 
-/**
- * A safe post-login destination: a same-site relative path (starts with `/`, not
- * `//` or `/\`), never back to /login. Anything else becomes `/`.
- */
+/** A safe post-login destination (same rule as the entry form's `from`), or `/`. */
 export function safeNext(value: FormDataEntryValue | string | null | undefined): string {
-  if (typeof value !== 'string' || !value.startsWith('/') || /^\/[/\\]/.test(value)) {
-    return '/';
-  }
-  try {
-    const base = 'http://ficka.invalid';
-    const target = new URL(value, base);
-    if (target.origin !== base || target.pathname === '/login') return '/';
-    return `${target.pathname}${target.search}${target.hash}`;
-  } catch {
-    return '/';
-  }
+  return safeReturn(value, '/');
 }

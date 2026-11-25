@@ -3,6 +3,7 @@ import { isIsoDate, todayIso } from '#lib/dates.js';
 import { formString } from '#lib/forms.js';
 import { api } from '#lib/server/api.js';
 import { readEntryPayload } from '#lib/server/entry-form.js';
+import { safeReturn, withParams } from '#lib/return-to.js';
 import type { Category, Direction, Entry, VatRate } from '#lib/types.js';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -24,6 +25,8 @@ export const load: PageServerLoad = async (event) => {
     rates: rates.ok ? rates.data : [],
     initialDirection: direction,
     initialDate: date,
+    /** Where Save and Cancel go back to (validated; /entries by default). */
+    from: safeReturn(params.get('from')),
     // Changes on every "Save and add another", so the page re-mounts an empty form.
     formKey: `${event.url.search}`
   };
@@ -43,10 +46,19 @@ export const actions: Actions = {
         message: result.code === 'validation_error' ? null : result.message
       });
     }
+    const from = safeReturn(formString(form, 'from'));
     if (formString(form, 'then') === 'another') {
-      const query = `direction=${payload.direction}&date=${payload.invoice_date}&saved=${result.data.id}`;
-      redirect(303, `/entries/new?${query}`);
+      redirect(
+        303,
+        withParams('/entries/new', {
+          direction: payload.direction,
+          date: payload.invoice_date,
+          saved: result.data.id,
+          from
+        })
+      );
     }
-    redirect(303, `/entries/${result.data.id}?saved=1`);
+    // Back to the list the user came from, with the saved row highlighted.
+    redirect(303, withParams(from, { saved: 1, highlight: result.data.id }));
   }
 };

@@ -41,3 +41,32 @@
     @apply bg-bg font-sans text-ink antialiased;
   }
 }
+
+/* A saved row glows softly for about 2 seconds (no motion when reduced motion is asked). */
+@keyframes row-highlight {
+  from {
+    background-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+
+@keyframes row-highlight-static {
+  from,
+  to {
+    background-color: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  }
+}
+
+@layer components {
+  .row-highlight {
+    animation: row-highlight 2.2s ease-out;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .row-highlight {
+      animation: row-highlight-static 2s steps(1, end);
+    }
+  }
+}

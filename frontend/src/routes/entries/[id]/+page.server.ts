@@ -4,6 +4,7 @@ import { isIsoDate } from '#lib/dates.js';
 import { parseAmount } from '#lib/money.js';
 import { api } from '#lib/server/api.js';
 import { readEntryPayload } from '#lib/server/entry-form.js';
+import { safeReturn, withParams } from '#lib/return-to.js';
 import type { Category, Entry, VatRate } from '#lib/types.js';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -23,14 +24,17 @@ export const load: PageServerLoad = async (event) => {
   return {
     entry: entry.data,
     categories: categories.ok ? categories.data : [],
-    rates: rates.ok ? rates.data : []
+    rates: rates.ok ? rates.data : [],
+    /** Where Save, Cancel and Delete go back to (validated; /entries by default). */
+    from: safeReturn(event.url.searchParams.get('from'))
   };
 };
 
 export const actions: Actions = {
   save: async (event) => {
     const id = entryId(event.params.id);
-    const payload = readEntryPayload((await event.request.formData()).get('payload'));
+    const form = await event.request.formData();
+    const payload = readEntryPayload(form.get('payload'));
     if (!payload) {
       return fail(400, { errors: {}, message: 'The form couldn’t be read. Reload the page.' });
     }
@@ -43,7 +47,7 @@ export const actions: Actions = {
         message: result.code === 'validation_error' ? null : result.message
       });
     }
-    redirect(303, `/entries/${id}?saved=1`);
+    redirect(303, withParams(safeReturn(formString(form, 'from')), { saved: 1, highlight: id }));
   },
 
   markPaid: async (event) => {
@@ -53,21 +57,24 @@ export const actions: Actions = {
       body: {}
     });
     if (!result.ok) return fail(result.status, { action: 'markPaid', message: result.message });
-    redirect(303, `/entries/${id}?marked=1`);
+    const from = safeReturn(event.url.searchParams.get('from'));
+    redirect(303, withParams(`/entries/${id}`, { marked: 1, from }));
   },
 
   confirm: async (event) => {
     const id = entryId(event.params.id);
     const result = await api<Entry>(event, `/api/entries/${id}/confirm`, { method: 'POST' });
     if (!result.ok) return fail(result.status, { action: 'confirm', message: result.message });
-    redirect(303, `/entries/${id}?saved=1`);
+    const from = safeReturn(event.url.searchParams.get('from'));
+    redirect(303, withParams(`/entries/${id}`, { saved: 1, from }));
   },
 
   delete: async (event) => {
     const id = entryId(event.params.id);
+    const from = safeReturn(formString(await event.request.formData(), 'from'));
     const result = await api(event, `/api/entries/${id}`, { method: 'DELETE' });
     if (!result.ok) return fail(result.status, { action: 'delete', message: result.message });
-    redirect(303, '/entries?deleted=1');
+    redirect(303, withParams(from, { deleted: 1 }));
   },
 
   addPayment: async (event) => {

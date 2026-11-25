@@ -1,5 +1,7 @@
 <script lang="ts">
   import { Combobox } from 'bits-ui';
+  import Field from '#lib/components/layout/Field.svelte';
+  import { controlClass } from '#lib/components/layout/styles.js';
   import type { CounterpartyChoice, CounterpartyRole } from '#lib/types.js';
 
   interface Props {
@@ -98,8 +100,7 @@
   }
 </script>
 
-<div class="flex flex-col gap-0.5">
-  <label for={id} class="text-sm font-medium text-ink">{label}</label>
+<Field {label} for={id} error={createError ?? error} hint={busy ? 'Creating…' : null}>
   <Combobox.Root
     type="single"
     value={value ? String(value.id) : ''}
@@ -116,7 +117,7 @@
         placeholder="Search, or type a new name"
         aria-invalid={error || createError ? 'true' : undefined}
         aria-describedby={error || createError ? `${id}-error` : undefined}
-        class="min-h-[44px] w-full rounded-md border border-border bg-surface pr-9 pl-1.5 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent aria-invalid:border-expense"
+        class={[controlClass, 'pr-9']}
       />
       {#if value}
         <button
@@ -150,7 +151,7 @@
             value={item.value}
             label={item.label}
             class={[
-              'flex min-h-[40px] cursor-pointer items-center rounded-md px-1.5 text-sm outline-none data-highlighted:bg-nav',
+              'flex h-[40px] cursor-pointer items-center rounded-md px-1.5 text-sm outline-none data-highlighted:bg-nav',
               item.value === CREATE ? 'font-medium text-accent' : 'text-ink'
             ]}
           >
@@ -162,8 +163,4 @@
       </Combobox.Content>
     </Combobox.Portal>
   </Combobox.Root>
-  {#if busy}<p class="text-xs text-muted">Creating…</p>{/if}
-  {#if error || createError}
-    <p id="{id}-error" class="text-sm text-expense">{createError ?? error}</p>
-  {/if}
-</div>
+</Field>

@@ -4,6 +4,12 @@
   import { page } from '$app/state';
   import Amount from '#lib/components/Amount.svelte';
   import SelectField from '#lib/components/SelectField.svelte';
+  import Card from '#lib/components/layout/Card.svelte';
+  import Field from '#lib/components/layout/Field.svelte';
+  import FormGrid from '#lib/components/layout/FormGrid.svelte';
+  import Page from '#lib/components/layout/Page.svelte';
+  import PageHeader from '#lib/components/layout/PageHeader.svelte';
+  import { buttonClass, controlClass } from '#lib/components/layout/styles.js';
   import Toast from '#lib/components/Toast.svelte';
   import { formatVatNumber } from '#lib/identifiers.js';
   import { ROLE_LABELS, type CounterpartyRole } from '#lib/types.js';
@@ -52,136 +58,125 @@
   />
 {/if}
 
-<div class="flex flex-col gap-3">
-  <header class="flex flex-wrap items-center justify-between gap-2">
-    <h1 class="text-3xl font-semibold tracking-tight">Counterparties</h1>
-    <a
-      href={resolve('/counterparties/new')}
-      class="inline-flex min-h-[44px] items-center rounded-md bg-accent px-2.5 text-sm font-medium text-white hover:bg-accent-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-    >
-      New counterparty
-    </a>
-  </header>
+<Page>
+  <PageHeader title="Counterparties">
+    {#snippet actions()}
+      <a href={resolve('/counterparties/new')} class={buttonClass('primary')}>New counterparty</a>
+    {/snippet}
+  </PageHeader>
 
-  <form
-    bind:this={filterForm}
-    method="GET"
-    data-sveltekit-keepfocus
-    class="grid grid-cols-1 gap-1.5 rounded-xl border border-border bg-surface p-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]"
-  >
-    <div class="flex flex-col gap-0.5">
-      <label for="cp-q" class="text-sm font-medium">Search</label>
-      <div class="flex gap-0.5">
-        <input
-          id="cp-q"
-          type="search"
-          name="q"
-          value={filters.q}
-          placeholder="Name, VAT number or IBAN"
-          class="min-h-[44px] w-full min-w-0 rounded-md border border-border bg-surface px-1.5 text-base placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent"
-        />
-        <button
-          type="submit"
-          class="min-h-[44px] rounded-md border border-border px-1.5 text-sm font-medium hover:bg-nav focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          Search
-        </button>
-      </div>
-    </div>
-    <SelectField
-      label="Role"
-      name="role"
-      items={roleItems}
-      value={filters.role ?? 'any'}
-      onchange={submit}
-    />
-  </form>
+  <div class="flex flex-col gap-3">
+    <Card label="Filters">
+      <form bind:this={filterForm} method="GET" data-sveltekit-keepfocus>
+        <FormGrid columns={4}>
+          <Field label="Search" for="cp-q" class="sm:col-span-2">
+            <div class="flex gap-0.5">
+              <input
+                id="cp-q"
+                type="search"
+                name="q"
+                value={filters.q}
+                placeholder="Name, VAT number or IBAN"
+                class={controlClass}
+              />
+              <button type="submit" class={buttonClass('secondary')}>Search</button>
+            </div>
+          </Field>
+          <SelectField
+            label="Role"
+            name="role"
+            items={roleItems}
+            value={filters.role ?? 'any'}
+            onchange={submit}
+          />
+        </FormGrid>
+      </form>
+    </Card>
 
-  {#if list.items.length === 0}
-    <div class="rounded-xl border border-border bg-surface px-3 py-5 text-center">
-      {#if filters.q || filters.role}
-        <p class="text-muted">No counterparties match.</p>
-        <a
-          href={resolve('/counterparties')}
-          class="mt-2 inline-flex min-h-[44px] items-center rounded-md border border-border px-2.5 text-sm font-medium hover:bg-nav"
-        >
-          Clear filters
-        </a>
-      {:else}
-        <p class="text-muted">No customers or suppliers yet.</p>
-        <a
-          href={resolve('/counterparties/new')}
-          class="mt-2 inline-flex min-h-[44px] items-center rounded-md bg-accent px-2.5 text-sm font-medium text-white hover:bg-accent-hover"
-        >
-          New counterparty
-        </a>
-      {/if}
-    </div>
-  {:else}
-    <div class="overflow-x-auto rounded-xl border border-border bg-surface">
-      <table class="w-full min-w-[640px] text-left text-sm">
-        <thead class="border-b border-border text-xs text-muted">
-          <tr>
-            <th scope="col" class="px-2 py-1.5 font-medium">Name</th>
-            <th scope="col" class="px-2 py-1.5 font-medium">VAT number</th>
-            <th scope="col" class="px-2 py-1.5 font-medium">Role</th>
-            <th scope="col" class="px-2 py-1.5 text-right font-medium">Entries</th>
-            <th scope="col" class="px-2 py-1.5 text-right font-medium">Open balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each list.items as cp (cp.id)}
-            <tr class="relative border-b border-border last:border-b-0 hover:bg-bg">
-              <td class="px-2 py-1.5 font-medium">
-                <a
-                  href={resolve('/counterparties/[id]', { id: String(cp.id) })}
-                  class="after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-accent"
-                >
-                  {cp.name}
-                </a>
-              </td>
-              <td class="px-2 py-1.5 text-muted amount">{formatVatNumber(cp.vat_number) || '—'}</td>
-              <td class="px-2 py-1.5 text-muted">{ROLE_LABELS[cp.role]}</td>
-              <td class="px-2 py-1.5 text-right amount">{cp.entries_count}</td>
-              <td class="px-2 py-1.5 text-right">
-                {#if cp.open_balance_cents === 0}
-                  <span class="text-muted">—</span>
-                {:else}
-                  <Amount
-                    cents={Math.abs(cp.open_balance_cents)}
-                    direction={cp.open_balance_cents > 0 ? 'income' : 'expense'}
-                  />
-                {/if}
-              </td>
+    {#if list.items.length === 0}
+      <Card>
+        <div class="py-3 text-center">
+          {#if filters.q || filters.role}
+            <p class="text-muted">No counterparties match.</p>
+            <a href={resolve('/counterparties')} class={[buttonClass('secondary'), 'mt-2']}>
+              Clear filters
+            </a>
+          {:else}
+            <p class="text-muted">No customers or suppliers yet.</p>
+            <a href={resolve('/counterparties/new')} class={[buttonClass('primary'), 'mt-2']}>
+              New counterparty
+            </a>
+          {/if}
+        </div>
+      </Card>
+    {:else}
+      <div class="overflow-x-auto rounded-xl border border-border bg-surface">
+        <table class="w-full min-w-[640px] text-left text-sm">
+          <thead class="border-b border-border text-xs text-muted">
+            <tr>
+              <th scope="col" class="px-2 py-1.5 font-medium">Name</th>
+              <th scope="col" class="px-2 py-1.5 font-medium">VAT number</th>
+              <th scope="col" class="px-2 py-1.5 font-medium">Role</th>
+              <th scope="col" class="px-2 py-1.5 text-right font-medium">Entries</th>
+              <th scope="col" class="px-2 py-1.5 text-right font-medium">Open balance</th>
             </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
-    <p class="text-xs text-muted">
-      Open balance: what this counterparty still owes you (+) or what you still owe them (−), on
-      confirmed entries.
-    </p>
-    <nav aria-label="Pagination" class="flex flex-wrap items-center justify-between gap-2">
-      <p class="text-sm text-muted amount">{firstRow}–{lastRow} of {list.total}</p>
-      <div class="flex gap-1">
-        {#if filters.page > 1}
-          <a
-            href={resolve(`/counterparties${query(filters.page - 1)}`)}
-            class="inline-flex min-h-[44px] items-center rounded-md border border-border px-2 text-sm hover:bg-nav"
-          >
-            Previous
-          </a>
-        {/if}
-        {#if lastRow < list.total}
-          <a
-            href={resolve(`/counterparties${query(filters.page + 1)}`)}
-            class="inline-flex min-h-[44px] items-center rounded-md border border-border px-2 text-sm hover:bg-nav"
-          >
-            Next
-          </a>
-        {/if}
+          </thead>
+          <tbody>
+            {#each list.items as cp (cp.id)}
+              <tr class="relative border-b border-border last:border-b-0 hover:bg-bg">
+                <td class="px-2 py-1.5 font-medium">
+                  <a
+                    href={resolve('/counterparties/[id]', { id: String(cp.id) })}
+                    class="after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-accent"
+                  >
+                    {cp.name}
+                  </a>
+                </td>
+                <td class="px-2 py-1.5 text-muted amount">
+                  {formatVatNumber(cp.vat_number) || '—'}
+                </td>
+                <td class="px-2 py-1.5 text-muted">{ROLE_LABELS[cp.role]}</td>
+                <td class="px-2 py-1.5 text-right amount">{cp.entries_count}</td>
+                <td class="px-2 py-1.5 text-right">
+                  {#if cp.open_balance_cents === 0}
+                    <span class="text-muted">—</span>
+                  {:else}
+                    <Amount
+                      cents={Math.abs(cp.open_balance_cents)}
+                      direction={cp.open_balance_cents > 0 ? 'income' : 'expense'}
+                    />
+                  {/if}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
       </div>
-    </nav>
-  {/if}
-</div>
+      <p class="text-xs text-muted">
+        Open balance: what this counterparty still owes you (+) or what you still owe them (−), on
+        confirmed entries.
+      </p>
+      <nav aria-label="Pagination" class="flex flex-wrap items-center justify-between gap-2">
+        <p class="text-sm text-muted amount">{firstRow}–{lastRow} of {list.total}</p>
+        <div class="flex gap-1">
+          {#if filters.page > 1}
+            <a
+              href={resolve(`/counterparties${query(filters.page - 1)}`)}
+              class={buttonClass('secondary')}
+            >
+              Previous
+            </a>
+          {/if}
+          {#if lastRow < list.total}
+            <a
+              href={resolve(`/counterparties${query(filters.page + 1)}`)}
+              class={buttonClass('secondary')}
+            >
+              Next
+            </a>
+          {/if}
+        </div>
+      </nav>
+    {/if}
+  </div>
+</Page>

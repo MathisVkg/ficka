@@ -64,11 +64,9 @@
       </div>
     </nav>
 
-    <main class="min-w-0 flex-1 p-2 md:p-4">
-      <!-- Full width next to the navigation, capped for very wide screens. -->
-      <div class="w-full max-w-[1600px]">
-        {@render children()}
-      </div>
+    <!-- Each page wraps itself in <Page> (full width, 32px / 16px padding). -->
+    <main class="flex min-w-0 flex-1">
+      {@render children()}
     </main>
   </div>
 {:else}

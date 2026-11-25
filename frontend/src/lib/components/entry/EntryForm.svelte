@@ -16,8 +16,11 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
   import { enhance } from '$app/forms';
-  import { resolve } from '$app/paths';
   import Button from '#lib/components/Button.svelte';
+  import Card from '#lib/components/layout/Card.svelte';
+  import Field from '#lib/components/layout/Field.svelte';
+  import FormGrid from '#lib/components/layout/FormGrid.svelte';
+  import { buttonClass, checkboxClass, controlClass } from '#lib/components/layout/styles.js';
   import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
   import Notice from '#lib/components/Notice.svelte';
   import PaymentBadge from '#lib/components/PaymentBadge.svelte';
@@ -25,6 +28,13 @@
   import SourceIcon from '#lib/components/SourceIcon.svelte';
   import CounterpartyCombobox from '#lib/components/entry/CounterpartyCombobox.svelte';
   import { todayIso } from '#lib/dates.js';
+  import {
+    categoryRateSource,
+    categoryWins,
+    rateWins,
+    type CategorySource,
+    type RateSource
+  } from '#lib/entry-defaults.js';
   import { canShowSimply, needsLinesEditor } from '#lib/entry-mode.js';
   import {
     centsToInput,
@@ -61,6 +71,10 @@
     initialDate?: string | null;
     /** Rendered under More details, outside the form (e.g. the payments block). */
     details?: Snippet;
+    /** Where Cancel goes, and where the action returns after saving (validated). */
+    cancelHref: string;
+    /** Existing entries: opens the delete dialog (the button sits in the summary card). */
+    ondelete?: () => void;
   }
 
   let {
@@ -72,7 +86,9 @@
     action,
     initialDirection = null,
     initialDate = null,
-    details
+    details,
+    cancelHref,
+    ondelete
   }: Props = $props();
 
   const DIRECTION_KEY = 'ficka.entry.direction';
@@ -95,16 +111,6 @@
   }
 
   // --- State: props are read once (the page re-mounts the form after a save) -----------
-
-  type Source = 'user' | 'suggestion' | 'category' | 'counterparty' | 'last' | 'default';
-  const RANK: Record<Source, number> = {
-    default: 0,
-    last: 1,
-    counterparty: 2,
-    category: 3,
-    suggestion: 4,
-    user: 5
-  };
 
   interface LineState {
     key: number;
@@ -147,7 +153,7 @@
         ? String(initial.rates[0].rate_bp)
         : 'none'
   );
-  let rateSource = $state<Source>(start ? 'user' : 'default');
+  let rateSource = $state<RateSource>(start ? 'user' : 'default');
 
   // Lines mode: the TASK-003 lines editor.
   let linesMode = $state(start ? needsLinesEditor(start) : false);
@@ -172,7 +178,7 @@
       : null
   );
   let categoryId = $state(start?.category ? String(start.category.id) : '');
-  let categorySource = $state<Source | null>(start?.category ? 'user' : null);
+  let categorySource = $state<CategorySource | null>(start?.category ? 'user' : null);
   let description = $state(start?.description ?? '');
 
   let paid = $state(startPaid);
@@ -405,18 +411,16 @@
     return LABELS[key] ?? key;
   }
 
-  // --- Defaults and suggestions -----------------------------------------------------------
-  // Priority: what the user chose > a suggestion > the category default >
-  // the counterparty default > the last rate used > the highest rate.
+  // --- Defaults and suggestions (priority rules: #lib/entry-defaults.ts) -------------------
 
-  function setRate(value: string, source: Source) {
+  function setRate(value: string, source: RateSource) {
     if (linesMode) {
       lines = lines.map((line) =>
         line.rateTouched ? line : { ...line, rate: value, vatManual: false }
       );
       return;
     }
-    if (rateSource !== 'user' && RANK[source] >= RANK[rateSource]) {
+    if (rateWins(rateSource, source)) {
       rate = value;
       rateSource = source;
     }
@@ -426,15 +430,13 @@
     return category.default_vat_rate_bp === null ? 'none' : String(category.default_vat_rate_bp);
   }
 
-  function setCategory(id: number | null, source: Source) {
+  function setCategory(id: number | null, source: CategorySource) {
     if (id === null) return;
     const category = categories.find((c) => c.id === id && c.direction === direction);
-    if (!category) return;
-    if (categorySource !== null && RANK[source] < RANK[categorySource]) return;
-    if (categorySource === 'user') return;
+    if (!category || !categoryWins(categorySource, source)) return;
     categoryId = String(category.id);
     categorySource = source;
-    setRate(rateOfCategory(category), 'category');
+    setRate(rateOfCategory(category), categoryRateSource(source));
   }
 
   async function fetchSuggestion(params: { counterpartyId?: number; description?: string }) {
@@ -478,7 +480,8 @@
   function onCategory(value: string) {
     categorySource = value ? 'user' : null;
     const category = categories.find((c) => String(c.id) === value);
-    if (category) setRate(rateOfCategory(category), 'category');
+    // A category picked by hand beats a suggested rate (but not a rate typed by hand).
+    if (category) setRate(rateOfCategory(category), 'userCategory');
   }
 
   // --- Actions --------------------------------------------------------------------------
@@ -616,13 +619,13 @@
         : `This will remove the ${start.payments.length} recorded payments (${formatCents(start.paid_cents)}).`
       : ''
   );
-
-  const inputClass =
-    'min-h-[44px] w-full rounded-md border border-border bg-surface px-1.5 text-base text-ink placeholder:text-muted focus:border-accent focus:outline-2 focus:outline-offset-1 focus:outline-accent aria-invalid:border-expense';
 </script>
 
-<div class="grid grid-cols-1 items-start gap-3 min-[1200px]:grid-cols-[minmax(0,1fr)_360px]">
-  <div class="flex min-w-0 flex-col gap-3">
+<!-- Form column and summary column start on the same top line. -->
+<div
+  class="grid grid-cols-1 items-start gap-3 min-[1200px]:grid-cols-[minmax(0,1fr)_360px] min-[1600px]:grid-cols-[minmax(0,1fr)_400px]"
+>
+  <Card label="Entry">
     <form
       id="entry-form"
       bind:this={formElement}
@@ -661,6 +664,7 @@
       }}
     >
       <input type="hidden" name="payload" value={JSON.stringify(payload)} />
+      <input type="hidden" name="from" value={cancelHref} />
 
       {#if errorList.length > 0 || serverMessage}
         <Notice
@@ -685,21 +689,21 @@
         </Notice>
       {/if}
 
-      <!-- Direction -->
+      <!-- First row: Expense / Income -->
       <div
         id="entry-direction"
-        class="inline-flex w-fit rounded-lg border border-border bg-surface p-0.5"
+        class="inline-flex w-fit rounded-lg border border-border bg-bg p-0.5"
         role="radiogroup"
         aria-label="Type"
       >
         {#each [{ value: 'expense', label: 'Expense' }, { value: 'income', label: 'Income' }] as option (option.value)}
           <label
             class={[
-              'inline-flex min-h-[44px] cursor-pointer items-center rounded-md px-2.5 text-sm font-medium transition-colors duration-150 ease-out has-focus-visible:outline-2 has-focus-visible:outline-accent',
+              'inline-flex h-[40px] cursor-pointer items-center rounded-md px-2.5 text-sm font-medium transition-colors duration-150 ease-out has-focus-visible:outline-2 has-focus-visible:outline-accent',
               direction === option.value
                 ? option.value === 'income'
-                  ? 'bg-income/10 text-income'
-                  : 'bg-nav text-ink'
+                  ? 'bg-surface text-income shadow-[0_0_0_1px_var(--color-border)]'
+                  : 'bg-surface text-ink shadow-[0_0_0_1px_var(--color-border)]'
                 : 'text-muted hover:text-ink'
             ]}
           >
@@ -716,150 +720,130 @@
         {/each}
       </div>
 
-      <section class="rounded-xl border border-border bg-surface p-2 md:p-3">
-        <!-- Date, amount, VAT -->
-        <div
-          class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.3fr)] lg:items-start"
-        >
-          <div class="flex flex-col gap-0.5">
-            <label for="entry-invoice-date" class="text-sm font-medium">Date</label>
-            <input
-              id="entry-invoice-date"
-              type="date"
-              required
-              bind:value={invoiceDate}
-              onchange={onInvoiceDate}
-              aria-invalid={errors.invoice_date ? 'true' : undefined}
-              class={inputClass}
-            />
-            {#if errors.invoice_date}<p class="text-sm text-expense">{errors.invoice_date}</p>{/if}
-          </div>
-
-          {#if !linesMode}
-            {@const amountError =
-              errors['lines.0.gross_cents'] ??
-              errors.lines ??
-              (amountText ? simple.errors.amount : undefined)}
-            <div class="flex flex-col gap-0.5">
-              <label for="entry-amount" class="text-sm font-medium">Amount (incl. VAT)</label>
-              <input
-                id="entry-amount"
-                inputmode="decimal"
-                autocomplete="off"
-                placeholder="0,00"
-                bind:value={amountText}
-                aria-invalid={amountError ? 'true' : undefined}
-                aria-describedby="entry-amount-breakdown"
-                class={[inputClass, 'text-right text-lg amount']}
-              />
-              {#if amountError}<p class="text-sm text-expense">{amountError}</p>{/if}
-            </div>
-            <div>
-              <SelectField
-                id="entry-vat-rate"
-                label="VAT rate"
-                items={rateItemsWith(rate)}
-                bind:value={rate}
-                error={errors['lines.0.vat_rate_bp'] ?? simple.errors.rate}
-                onchange={() => (rateSource = 'user')}
-              />
-              {#if rateSource === 'suggestion'}
-                <p class="mt-0.5 text-xs text-accent">Suggested from a similar entry</p>
-              {/if}
-            </div>
-            <p
-              id="entry-amount-breakdown"
-              class="text-sm text-muted amount lg:pt-[30px]"
-              aria-live="polite"
-            >
-              VAT {formatCents(totals.vat)} · excl. {formatCents(totals.net)}
-            </p>
-          {:else}
-            <p class="text-sm text-muted lg:col-span-3 lg:pt-[30px]">
-              Several lines: the amounts are under More details.
-            </p>
-          {/if}
-        </div>
-        {#if ratesLoading}<p class="mt-1 text-xs text-muted">Loading the VAT rates…</p>{/if}
-
-        <!-- Category, counterparty, description -->
-        <div class="mt-2 grid grid-cols-1 gap-2 md:grid-cols-2">
-          <div>
-            <SelectField
-              id="entry-category-id"
-              label="Category"
-              items={categoryItems}
-              bind:value={categoryId}
-              placeholder="No category"
-              error={errors.category_id}
-              onchange={onCategory}
-            />
-            {#if categorySource === 'suggestion'}
-              <p class="mt-0.5 text-xs text-accent">Suggested from a similar entry</p>
-            {/if}
-          </div>
-          <CounterpartyCombobox
-            id="entry-counterparty-id"
-            label="Counterparty (optional)"
-            bind:value={counterparty}
-            createRole={direction === 'income' ? 'customer' : 'supplier'}
-            error={errors.counterparty_id}
-            onselect={onCounterparty}
+      <!-- Date, amount (with live VAT as its hint), VAT rate -->
+      <FormGrid columns={3}>
+        <Field label="Date" for="entry-invoice-date" error={errors.invoice_date}>
+          <input
+            id="entry-invoice-date"
+            type="date"
+            required
+            bind:value={invoiceDate}
+            onchange={onInvoiceDate}
+            aria-invalid={errors.invoice_date ? 'true' : undefined}
+            class={controlClass}
           />
-          <div class="flex flex-col gap-0.5 md:col-span-2">
-            <label for="entry-description" class="text-sm font-medium">
-              Description (optional)
-            </label>
-            <input
-              id="entry-description"
-              maxlength="500"
-              bind:value={description}
-              onblur={onDescriptionBlur}
-              class={inputClass}
-            />
-          </div>
-        </div>
+        </Field>
 
-        <!-- Paid -->
-        <div class="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <label class="flex min-h-[44px] cursor-pointer items-center gap-1 text-sm font-medium">
+        {#if !linesMode}
+          {@const amountError =
+            errors['lines.0.gross_cents'] ??
+            errors.lines ??
+            (amountText ? simple.errors.amount : undefined)}
+          <Field label="Amount (incl. VAT)" for="entry-amount" error={amountError}>
+            <input
+              id="entry-amount"
+              inputmode="decimal"
+              autocomplete="off"
+              placeholder="0,00"
+              bind:value={amountText}
+              aria-invalid={amountError ? 'true' : undefined}
+              aria-describedby="entry-amount-hint"
+              class={[controlClass, 'text-right amount']}
+            />
+            {#snippet hintContent()}
+              <span class="amount" aria-live="polite">
+                VAT {formatCents(totals.vat)} · excl. {formatCents(totals.net)}
+              </span>
+            {/snippet}
+          </Field>
+          <SelectField
+            id="entry-vat-rate"
+            label="VAT rate"
+            items={rateItemsWith(rate)}
+            bind:value={rate}
+            error={errors['lines.0.vat_rate_bp'] ?? simple.errors.rate}
+            hint={rateSource === 'suggestion' ? 'Suggested from a similar entry' : null}
+            onchange={() => (rateSource = 'user')}
+          />
+        {:else}
+          <p class="text-sm text-muted sm:col-span-1 xl:col-span-2 xl:pt-[22px]">
+            Several lines: the amounts are in the lines below.
+          </p>
+        {/if}
+      </FormGrid>
+      {#if ratesLoading}<p class="text-xs text-muted">Loading the VAT rates…</p>{/if}
+
+      <!-- Category, counterparty, description -->
+      <FormGrid columns={3}>
+        <SelectField
+          id="entry-category-id"
+          label="Category"
+          items={categoryItems}
+          bind:value={categoryId}
+          placeholder="No category"
+          error={errors.category_id}
+          hint={categorySource === 'suggestion' ? 'Suggested from a similar entry' : null}
+          onchange={onCategory}
+        />
+        <CounterpartyCombobox
+          id="entry-counterparty-id"
+          label="Counterparty (optional)"
+          bind:value={counterparty}
+          createRole={direction === 'income' ? 'customer' : 'supplier'}
+          error={errors.counterparty_id}
+          onselect={onCounterparty}
+        />
+        <Field label="Description (optional)" for="entry-description">
+          <input
+            id="entry-description"
+            maxlength="500"
+            bind:value={description}
+            onblur={onDescriptionBlur}
+            class={controlClass}
+          />
+        </Field>
+      </FormGrid>
+
+      <!-- Paid: the checkbox sits on a 44px row aligned with the controls next to it. -->
+      <FormGrid columns={3}>
+        <div class="flex flex-col gap-0.5">
+          <div class="min-h-[20px]" aria-hidden="true"></div>
+          <label class="flex h-[44px] w-fit cursor-pointer items-center gap-1 text-sm font-medium">
             <input
               id="entry-paid"
               type="checkbox"
               bind:checked={paid}
               onchange={() => (paidTouched = true)}
               onkeydown={submitOnEnter}
-              class="size-2.5 accent-(--color-accent)"
+              class={checkboxClass}
             />
             Paid
           </label>
-          {#if !paid}
-            <div class="flex items-center gap-1">
-              <label for="entry-due-date" class="text-sm text-muted">Expected on</label>
-              <input
-                id="entry-due-date"
-                type="date"
-                bind:value={dueDate}
-                min={invoiceDate}
-                aria-invalid={errors.due_date ? 'true' : undefined}
-                class={[inputClass, 'w-auto']}
-              />
-            </div>
-            {#if errors.due_date}<p class="w-full text-sm text-expense">{errors.due_date}</p>{/if}
-          {:else if hasComplexPayments && !paidTouched}
-            <span class="text-sm text-muted">The payments are listed under More details.</span>
-          {/if}
         </div>
-      </section>
+        {#if !paid}
+          <Field label="Expected on" for="entry-due-date" error={errors.due_date}>
+            <input
+              id="entry-due-date"
+              type="date"
+              bind:value={dueDate}
+              min={invoiceDate}
+              aria-invalid={errors.due_date ? 'true' : undefined}
+              class={controlClass}
+            />
+          </Field>
+        {:else if hasComplexPayments && !paidTouched}
+          <p class="text-sm text-muted sm:pt-[34px]">The payments are listed under More details.</p>
+        {/if}
+      </FormGrid>
 
-      <!-- More details -->
-      <div>
+      <!-- More details: a disclosure at the bottom of the same card. -->
+      <div class="border-t border-border pt-2">
         <button
           type="button"
           aria-expanded={detailsOpen}
           aria-controls="entry-details"
           onclick={() => (detailsOpen = !detailsOpen)}
-          class="inline-flex min-h-[44px] items-center gap-1 rounded-md px-1 text-sm font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-accent"
+          class="-ml-1 inline-flex h-[44px] items-center gap-1 rounded-md px-1 text-sm font-medium text-ink hover:bg-nav focus-visible:outline-2 focus-visible:outline-accent"
         >
           <span
             aria-hidden="true"
@@ -869,179 +853,156 @@
           </span>
           More details
         </button>
-      </div>
 
-      <section
-        id="entry-details"
-        hidden={!detailsOpen}
-        class="flex flex-col gap-3 rounded-xl border border-border bg-surface p-2 md:p-3"
-      >
-        <div class="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-3">
-          {#if paymentInstruction.mode === 'paid'}
-            <div class="flex flex-col gap-0.5">
-              <label for="entry-paid-on" class="text-sm font-medium">Paid on</label>
-              <input
-                id="entry-paid-on"
-                type="date"
-                bind:value={paidOn}
-                oninput={() => (paidOnTouched = true)}
-                aria-invalid={errors['payment.paid_on'] ? 'true' : undefined}
-                class={inputClass}
-              />
-              {#if errors['payment.paid_on']}
-                <p class="text-sm text-expense">{errors['payment.paid_on']}</p>
-              {/if}
-            </div>
-          {/if}
-          {#if paid && dueDate}
-            <div class="flex flex-col gap-0.5">
-              <label for="entry-due-date-details" class="text-sm font-medium">Due date</label>
-              <input
-                id="entry-due-date-details"
-                type="date"
-                bind:value={dueDate}
-                min={invoiceDate}
-                class={inputClass}
-              />
-            </div>
-          {/if}
-          <div class="flex flex-col gap-0.5">
-            <label for="entry-invoice-number" class="text-sm font-medium">Invoice number</label>
-            <input
-              id="entry-invoice-number"
-              maxlength="100"
-              bind:value={invoiceNumber}
-              class={inputClass}
-            />
-          </div>
-          <div class="flex flex-col gap-0.5">
-            <label for="entry-structured-reference" class="text-sm font-medium">
-              Structured reference
-            </label>
-            <input
-              id="entry-structured-reference"
-              maxlength="40"
-              inputmode="numeric"
-              placeholder="+++090/9337/55493+++"
-              bind:value={structuredReference}
-              aria-invalid={errors.structured_reference ? 'true' : undefined}
-              class={inputClass}
-            />
-            {#if errors.structured_reference}
-              <p class="text-sm text-expense">{errors.structured_reference}</p>
+        <div id="entry-details" hidden={!detailsOpen} class="mt-2 flex flex-col gap-3">
+          <FormGrid columns={3}>
+            {#if paymentInstruction.mode === 'paid'}
+              <Field label="Paid on" for="entry-paid-on" error={errors['payment.paid_on']}>
+                <input
+                  id="entry-paid-on"
+                  type="date"
+                  bind:value={paidOn}
+                  oninput={() => (paidOnTouched = true)}
+                  aria-invalid={errors['payment.paid_on'] ? 'true' : undefined}
+                  class={controlClass}
+                />
+              </Field>
             {/if}
-          </div>
-          <div class="flex flex-col gap-0.5 md:col-span-2 xl:col-span-1">
-            <label for="entry-document-location" class="text-sm font-medium">
-              Document location
-            </label>
-            <input
-              id="entry-document-location"
-              maxlength="2000"
-              placeholder="A link or a folder"
-              bind:value={documentLocation}
-              class={inputClass}
-            />
-          </div>
-        </div>
-
-        {#if !linesMode}
-          <div>
-            <button
-              type="button"
-              onclick={switchToLines}
-              class="min-h-[44px] rounded-md px-0.5 text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+            {#if paid && dueDate}
+              <Field label="Due date" for="entry-due-date-details">
+                <input
+                  id="entry-due-date-details"
+                  type="date"
+                  bind:value={dueDate}
+                  min={invoiceDate}
+                  class={controlClass}
+                />
+              </Field>
+            {/if}
+            <Field label="Invoice number" for="entry-invoice-number">
+              <input
+                id="entry-invoice-number"
+                maxlength="100"
+                bind:value={invoiceNumber}
+                class={controlClass}
+              />
+            </Field>
+            <Field
+              label="Structured reference"
+              for="entry-structured-reference"
+              error={errors.structured_reference}
             >
-              Split into several lines
-            </button>
-          </div>
-        {:else}
-          <!-- Lines editor (TASK-003) -->
-          <div
-            id="lines-editor"
-            tabindex="-1"
-            class="outline-none"
-            role="group"
-            aria-labelledby="lines-heading"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <h2 id="lines-heading" class="text-base font-semibold">Lines</h2>
-              <div class="flex flex-wrap items-center gap-2">
-                <label class="flex min-h-[44px] cursor-pointer items-center gap-1 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={amountsIncludeVat}
-                    onchange={(e) => setLinesVatMode(e.currentTarget.checked)}
-                    class="size-2.5 accent-(--color-accent)"
-                  />
-                  Amounts include VAT
-                </label>
-                {#if canGoBackToSimple}
-                  <button
-                    type="button"
-                    onclick={backToSimple}
-                    class="min-h-[44px] text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-                  >
-                    Back to a single amount
-                  </button>
-                {/if}
-              </div>
-            </div>
-            {#if errors.lines}<p class="mt-1 text-sm text-expense">{errors.lines}</p>{/if}
+              <input
+                id="entry-structured-reference"
+                maxlength="40"
+                inputmode="numeric"
+                placeholder="+++090/9337/55493+++"
+                bind:value={structuredReference}
+                aria-invalid={errors.structured_reference ? 'true' : undefined}
+                class={controlClass}
+              />
+            </Field>
+            <Field label="Document location" for="entry-document-location">
+              <input
+                id="entry-document-location"
+                maxlength="2000"
+                placeholder="A link or a folder"
+                bind:value={documentLocation}
+                class={controlClass}
+              />
+            </Field>
+          </FormGrid>
 
-            <div class="mt-2 flex flex-col gap-2">
-              {#each lines as line, index (line.key)}
-                {@const result = evaluatedLines[index]}
-                {@const amountError =
-                  lineError(index, 'amount') ??
-                  (line.amountText ? result.errors.amount : undefined)}
-                {@const vatError = lineError(index, 'vat') ?? result.errors.vat}
-                <div
-                  class="grid grid-cols-1 gap-1.5 rounded-lg border border-border p-1.5 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto] xl:items-start"
-                >
-                  <div class="flex flex-col gap-0.5">
-                    <label for="line-{index}-description" class="text-xs font-medium text-muted">
-                      Description
-                    </label>
+          {#if !linesMode}
+            <div>
+              <button
+                type="button"
+                onclick={switchToLines}
+                class="-ml-0.5 h-[44px] rounded-md px-0.5 text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+              >
+                Split into several lines
+              </button>
+            </div>
+          {:else}
+            <!-- Lines editor (TASK-003) -->
+            <div
+              id="lines-editor"
+              tabindex="-1"
+              class="outline-none"
+              role="group"
+              aria-labelledby="lines-heading"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <h2 id="lines-heading" class="text-base font-semibold">Lines</h2>
+                <div class="flex flex-wrap items-center gap-2">
+                  <label class="flex h-[44px] cursor-pointer items-center gap-1 text-sm">
                     <input
-                      id="line-{index}-description"
-                      bind:value={line.description}
-                      maxlength="500"
-                      class={inputClass}
+                      type="checkbox"
+                      checked={amountsIncludeVat}
+                      onchange={(e) => setLinesVatMode(e.currentTarget.checked)}
+                      class={checkboxClass}
                     />
-                  </div>
-                  <div class="flex flex-col gap-0.5">
-                    <label for="line-{index}-amount" class="text-xs font-medium text-muted">
-                      {amountsIncludeVat ? 'Amount incl. VAT' : 'Amount excl. VAT'}
-                    </label>
-                    <input
-                      id="line-{index}-amount"
-                      inputmode="decimal"
-                      autocomplete="off"
-                      placeholder="0,00"
-                      bind:value={line.amountText}
-                      aria-invalid={amountError ? 'true' : undefined}
-                      class={[inputClass, 'text-right amount']}
+                    Amounts include VAT
+                  </label>
+                  {#if canGoBackToSimple}
+                    <button
+                      type="button"
+                      onclick={backToSimple}
+                      class="h-[44px] text-sm font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                    >
+                      Back to a single amount
+                    </button>
+                  {/if}
+                </div>
+              </div>
+              {#if errors.lines}<p class="mt-1 text-sm text-expense">{errors.lines}</p>{/if}
+
+              <div class="mt-2 flex flex-col gap-2">
+                {#each lines as line, index (line.key)}
+                  {@const result = evaluatedLines[index]}
+                  {@const amountError =
+                    lineError(index, 'amount') ??
+                    (line.amountText ? result.errors.amount : undefined)}
+                  {@const vatError = lineError(index, 'vat') ?? result.errors.vat}
+                  <div
+                    class="grid grid-cols-1 items-start gap-2 rounded-lg border border-border p-2 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_44px]"
+                  >
+                    <Field label="Description" for="line-{index}-description">
+                      <input
+                        id="line-{index}-description"
+                        bind:value={line.description}
+                        maxlength="500"
+                        class={controlClass}
+                      />
+                    </Field>
+                    <Field
+                      label={amountsIncludeVat ? 'Amount incl. VAT' : 'Amount excl. VAT'}
+                      for="line-{index}-amount"
+                      error={amountError}
+                    >
+                      <input
+                        id="line-{index}-amount"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        placeholder="0,00"
+                        bind:value={line.amountText}
+                        aria-invalid={amountError ? 'true' : undefined}
+                        class={[controlClass, 'text-right amount']}
+                      />
+                    </Field>
+                    <SelectField
+                      id="line-{index}-rate"
+                      label="VAT rate"
+                      items={rateItemsWith(line.rate)}
+                      bind:value={line.rate}
+                      error={lineError(index, 'rate') ?? result.errors.rate}
+                      onchange={() => {
+                        lines[index] = { ...lines[index], rateTouched: true, vatManual: false };
+                      }}
                     />
-                    {#if amountError}<p class="text-xs text-expense">{amountError}</p>{/if}
-                  </div>
-                  <SelectField
-                    id="line-{index}-rate"
-                    label="VAT rate"
-                    items={rateItemsWith(line.rate)}
-                    bind:value={line.rate}
-                    error={lineError(index, 'rate') ?? result.errors.rate}
-                    onchange={() => {
-                      lines[index] = { ...lines[index], rateTouched: true, vatManual: false };
-                    }}
-                  />
-                  <div class="flex flex-col gap-0.5">
-                    <span class="flex items-center justify-between gap-1">
-                      <label for="line-{index}-vat" class="text-xs font-medium text-muted">
-                        VAT
-                      </label>
-                      {#if line.vatManual && line.rate !== 'none'}
-                        <span class="flex items-center gap-0.5">
+                    <Field label="VAT" for="line-{index}-vat" error={vatError}>
+                      {#snippet labelExtra()}
+                        {#if line.vatManual && line.rate !== 'none'}
                           <span class="rounded-full bg-warning/10 px-0.5 text-xs text-warning">
                             manual
                           </span>
@@ -1052,65 +1013,63 @@
                           >
                             ↺ Recalculate
                           </button>
-                        </span>
-                      {/if}
-                    </span>
-                    <input
-                      id="line-{index}-vat"
-                      inputmode="decimal"
-                      autocomplete="off"
-                      disabled={line.rate === 'none'}
-                      value={line.vatManual
-                        ? line.vatText
-                        : result.amounts
-                          ? centsToInput(result.amounts.vatCents)
-                          : ''}
-                      oninput={(e) =>
-                        (lines[index] = {
-                          ...lines[index],
-                          vatText: e.currentTarget.value,
-                          vatManual: true
-                        })}
-                      aria-invalid={vatError ? 'true' : undefined}
-                      class={[inputClass, 'text-right amount disabled:bg-bg disabled:text-muted']}
-                    />
-                    {#if vatError}<p class="text-xs text-expense">{vatError}</p>{/if}
+                        {/if}
+                      {/snippet}
+                      <input
+                        id="line-{index}-vat"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        disabled={line.rate === 'none'}
+                        value={line.vatManual
+                          ? line.vatText
+                          : result.amounts
+                            ? centsToInput(result.amounts.vatCents)
+                            : ''}
+                        oninput={(e) =>
+                          (lines[index] = {
+                            ...lines[index],
+                            vatText: e.currentTarget.value,
+                            vatManual: true
+                          })}
+                        aria-invalid={vatError ? 'true' : undefined}
+                        class={[controlClass, 'text-right amount']}
+                      />
+                    </Field>
+                    <div class="xl:pt-[22px]">
+                      <button
+                        type="button"
+                        aria-label="Remove line {index + 1}"
+                        disabled={lines.length === 1}
+                        onclick={() => (lines = lines.filter((_, i) => i !== index))}
+                        class="inline-flex h-[44px] w-[44px] items-center justify-center rounded-md text-muted hover:bg-nav hover:text-expense focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40"
+                      >
+                        ×
+                      </button>
+                    </div>
                   </div>
-                  <div class="flex items-end xl:pt-[22px]">
-                    <button
-                      type="button"
-                      aria-label="Remove line {index + 1}"
-                      disabled={lines.length === 1}
-                      onclick={() => (lines = lines.filter((_, i) => i !== index))}
-                      class="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md text-muted hover:bg-nav hover:text-expense focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-              {/each}
+                {/each}
+              </div>
+              <div class="mt-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onclick={() => (lines = [...lines, newLine()])}
+                >
+                  Add line
+                </Button>
+              </div>
             </div>
-            <div class="mt-2">
-              <Button
-                type="button"
-                variant="ghost"
-                class="border border-border"
-                onclick={() => (lines = [...lines, newLine()])}
-              >
-                Add line
-              </Button>
-            </div>
-          </div>
-        {/if}
-      </section>
+          {/if}
+        </div>
+      </div>
     </form>
 
     {#if detailsOpen && details}
-      {@render details()}
+      <div class="mt-3">{@render details()}</div>
     {/if}
-  </div>
+  </Card>
 
-  <!-- Summary and actions: sticky on wide screens, at the bottom otherwise -->
+  <!-- Summary and actions: sticky on wide screens, at the bottom otherwise. -->
   <aside
     aria-label="Summary"
     class="flex flex-col gap-2 rounded-xl border border-border bg-surface p-2 min-[1200px]:sticky min-[1200px]:top-4 md:p-3"
@@ -1147,20 +1106,34 @@
           form="entry-form"
           name="then"
           value="another"
-          variant="ghost"
-          class="border border-border"
+          variant="secondary"
           disabled={submitting}
         >
           Save and add another
         </Button>
       {/if}
-      <a
-        href={resolve('/entries')}
-        class="inline-flex min-h-[44px] items-center justify-center rounded-md px-2.5 text-sm font-medium text-muted hover:bg-nav hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        Cancel
-      </a>
+      <!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- cancelHref is a validated, resolve()d path -->
+      <a href={cancelHref} class={buttonClass('ghost')}>Cancel</a>
     </div>
+    {#if start && ondelete}
+      <div class="border-t border-border pt-2">
+        <Button type="button" variant="danger" class="w-full" onclick={ondelete}>
+          <svg
+            aria-hidden="true"
+            viewBox="0 0 16 16"
+            class="size-2"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M2.5 4h11M6 4V2.5h4V4M4 4l.7 9.5h6.6L12 4M6.5 6.5v5M9.5 6.5v5" />
+          </svg>
+          Delete entry
+        </Button>
+      </div>
+    {/if}
     {#if start}
       <dl class="flex flex-col gap-0.5 border-t border-border pt-1.5 text-xs text-muted">
         <div class="flex items-center justify-between gap-1">
@@ -1188,12 +1161,6 @@
     {removedPaymentsText} The entry will show as expected until a payment is recorded.
   {/snippet}
   {#snippet action()}
-    <button
-      type="button"
-      onclick={confirmUnpaid}
-      class="inline-flex min-h-[44px] items-center rounded-md bg-expense px-2.5 text-sm font-medium text-white hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-    >
-      Remove and save
-    </button>
+    <Button type="button" variant="danger-solid" onclick={confirmUnpaid}>Remove and save</Button>
   {/snippet}
 </ConfirmDialog>

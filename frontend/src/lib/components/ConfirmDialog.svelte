@@ -1,5 +1,6 @@
 <script lang="ts">
   import { AlertDialog } from 'bits-ui';
+  import { buttonClass } from '#lib/components/layout/styles.js';
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -38,9 +39,7 @@
         <div class="mt-2">{@render children()}</div>
       {/if}
       <div class="mt-3 flex flex-wrap justify-end gap-1">
-        <AlertDialog.Cancel
-          class="inline-flex min-h-[44px] items-center rounded-md px-2.5 text-sm font-medium text-muted hover:bg-nav hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
+        <AlertDialog.Cancel class={buttonClass('ghost')}>
           {cancelLabel}
         </AlertDialog.Cancel>
         {@render action()}

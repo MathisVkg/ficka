@@ -1,14 +1,16 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
   import { page } from '$app/state';
+  import Page from '#lib/components/layout/Page.svelte';
+  import PageHeader from '#lib/components/layout/PageHeader.svelte';
   import { SETTINGS_SECTIONS } from '#lib/settings-sections.js';
   import type { LayoutProps } from './$types';
 
   let { children }: LayoutProps = $props();
 </script>
 
-<div class="flex flex-col gap-3">
-  <h1 class="text-3xl font-semibold tracking-tight">Settings</h1>
+<Page>
+  <PageHeader title="Settings" />
 
   <div class="flex flex-col gap-3 lg:grid lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
     <!-- Section menu: tabs on narrow screens, a side menu from 1024px. -->
@@ -21,7 +23,7 @@
               href={resolve(section.href)}
               aria-current={active ? 'page' : undefined}
               class={[
-                'flex min-h-[44px] items-center px-1.5 text-sm transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-accent',
+                'flex h-[44px] items-center px-1.5 text-sm transition-colors duration-150 ease-out focus-visible:outline-2 focus-visible:outline-accent',
                 'border-b-2 lg:rounded-md lg:border-b-0',
                 active
                   ? 'border-accent font-medium text-ink lg:bg-surface lg:shadow-[0_0_0_1px_var(--color-border)]'
@@ -39,4 +41,4 @@
       {@render children()}
     </div>
   </div>
-</div>
+</Page>
